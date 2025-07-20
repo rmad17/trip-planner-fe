@@ -1,70 +1,142 @@
-# Getting Started with Create React App
+# Trip Planner Frontend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A React-based web application that integrates with the trip-planner backend APIs for managing trips and user accounts.
+
+## Features
+
+- **User Authentication**: Separate registration and login pages with JWT authentication
+- **Google OAuth**: Integration with Google login
+- **Dashboard**: View all trips with the ability to create new ones
+- **Trip Details**: Detailed view of individual trips
+- **Responsive Design**: Mobile-friendly interface using Tailwind CSS
+
+## Prerequisites
+
+- Node.js (v14 or higher)
+- npm or yarn
+- Trip Planner Backend running on `http://localhost:8080`
+
+## Installation
+
+1. Navigate to the frontend directory:
+```bash
+cd trip-planner-fe
+```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Start the development server:
+```bash
+npm start
+```
+
+The application will be available at `http://localhost:3000`.
+
+## Application Structure
+
+### Pages
+
+- **Login** (`/login`): User authentication with username/password or Google OAuth
+- **Register** (`/register`): User registration with form validation
+- **Dashboard** (`/dashboard`): Main page showing all trips with create trip functionality
+- **Trip Details** (`/trip/:tripId`): Detailed view of a specific trip
+
+### Components
+
+- **ProtectedRoute**: HOC for route protection
+- **AuthContext**: React context for authentication state management
+
+### Services
+
+- **API Service**: Axios-based HTTP client with JWT token management
+- **Auth API**: User registration, login, and profile endpoints
+- **Trip API**: Trip creation and retrieval endpoints
+
+## API Integration
+
+The frontend integrates with the following backend endpoints:
+
+### Authentication
+- `POST /api/v1/auth/signup` - User registration
+- `POST /api/v1/auth/login` - User login
+- `GET /api/v1/user/profile` - Get user profile
+- `GET /api/v1/auth/google/login` - Google OAuth login
+
+### Trips
+- `POST /api/v1/trips/create` - Create new trip
+- `GET /api/v1/trips` - Get all trips
+
+## Environment Setup
+
+Make sure the backend is running on `http://localhost:8080`. The frontend is configured to connect to this URL by default.
+
+### Backend Requirements
+
+The backend should be running with the following APIs available:
+- Account management (registration/login)
+- Trip management (CRUD operations)
+- JWT authentication middleware
+- Google OAuth integration
+
+## Usage
+
+1. **Registration**: Create a new account with username and password
+2. **Login**: Sign in with credentials or Google account
+3. **Dashboard**: View existing trips or create new ones
+4. **Trip Creation**: Fill out the trip form with details like:
+   - Place name
+   - Start/end dates
+   - Travel mode
+   - Hotels (comma-separated)
+   - Tags (comma-separated)
+   - Notes
+5. **Trip Details**: Click on any trip to view comprehensive details
 
 ## Available Scripts
 
-In the project directory, you can run:
-
 ### `npm start`
-
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
-
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+Runs the app in development mode at [http://localhost:3000](http://localhost:3000).
 
 ### `npm test`
-
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Launches the test runner in interactive watch mode.
 
 ### `npm run build`
-
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+Builds the app for production to the `build` folder.
 
 ### `npm run eject`
-
 **Note: this is a one-way operation. Once you `eject`, you can't go back!**
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## Development
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+### Adding New Features
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+The application is structured to easily add new features:
 
-## Learn More
+1. **New Pages**: Add to `src/pages/` and update routing in `App.js`
+2. **New Components**: Add to `src/components/`
+3. **New API Endpoints**: Update `src/services/api.js`
+4. **State Management**: Extend `AuthContext` or create new contexts
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+## Security
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+- JWT tokens are stored in localStorage
+- API requests include authentication headers automatically
+- Protected routes require authentication
+- Password validation on registration
+- Secure Google OAuth integration
 
-### Code Splitting
+## Styling
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+The application uses Tailwind CSS for styling, loaded via CDN for quick setup. For production, consider installing Tailwind CSS as a dependency for better performance and customization.
 
-### Analyzing the Bundle Size
+## Future Enhancements
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- Trip editing functionality
+- Trip sharing capabilities
+- Advanced search and filtering
+- Trip collaboration features
+- Mobile app using React Native
+- Offline support with service workers
