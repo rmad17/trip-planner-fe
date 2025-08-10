@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { tripAPI } from '../services/api';
+import PlaceSearchInput from '../components/PlaceSearchInput';
 import { 
   Plus, 
   MapPin, 
@@ -45,7 +46,7 @@ const Dashboard = () => {
   const fetchTrips = async () => {
     try {
       const response = await tripAPI.getAllTrips();
-      setTrips(response.data.trips || []);
+      setTrips(response.data.trip_plans || []);
     } catch (error) {
       setError('Failed to fetch trips');
       console.error('Error fetching trips:', error);
@@ -122,25 +123,25 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-primary-600 shadow-lg">
+      <header className="bg-black shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center space-x-4">
               <div>
                 <h1 className="text-2xl font-bold text-white font-display">TripCraft</h1>
-                <p className="text-primary-100">Welcome back, {user?.username}!</p>
+                <p className="text-gray-300">Welcome back, {user?.username}!</p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <button className="p-2 text-primary-100 hover:text-white hover:bg-primary-700 rounded-lg transition-colors">
+              <button className="p-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">
                 <Bell className="h-5 w-5" />
               </button>
-              <button className="p-2 text-primary-100 hover:text-white hover:bg-primary-700 rounded-lg transition-colors">
+              <button className="p-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">
                 <Settings className="h-5 w-5" />
               </button>
               <button
                 onClick={logout}
-                className="flex items-center space-x-2 px-4 py-2 bg-primary-700 hover:bg-primary-800 text-white rounded-lg transition-colors font-medium"
+                className="flex items-center space-x-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium"
               >
                 <LogOut className="h-4 w-4" />
                 <span>Logout</span>
@@ -151,7 +152,7 @@ const Dashboard = () => {
       </header>
 
       {/* Hero Section */}
-      <div className="bg-gradient-to-r from-primary-600 to-accent-500 py-12">
+      <div className="bg-primary-600 py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
             <div className="flex-1 min-w-0">
@@ -202,14 +203,17 @@ const Dashboard = () => {
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Trip Name / Destination
                     </label>
-                    <input
-                      type="text"
-                      name="place_name"
-                      required
+                    <PlaceSearchInput
                       value={newTrip.place_name}
-                      onChange={handleInputChange}
-                      placeholder="e.g., European Adventure, Tokyo 2024"
-                      className="input-field"
+                      onChange={(value) => setNewTrip(prev => ({ ...prev, place_name: value }))}
+                      placeholder="e.g., Paris, Tokyo, European Adventure"
+                      onPlaceSelect={(place) => {
+                        setNewTrip(prev => ({ 
+                          ...prev, 
+                          place_name: place.description,
+                          destination: place 
+                        }));
+                      }}
                     />
                   </div>
                   <div>
@@ -364,26 +368,26 @@ const Dashboard = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {trips.map((tripData) => (
+            {trips.map((trip) => (
               <div
-                key={tripData.trip.id}
+                key={trip.id}
                 className="card-hover cursor-pointer transform hover:scale-105 transition-all duration-200"
-                onClick={() => navigate(`/trip/${tripData.trip.id}`)}
+                onClick={() => navigate(`/trip/${trip.id}`)}
               >
-                <div className="h-48 bg-gradient-to-br from-accent-400 to-sage-500 relative overflow-hidden">
+                <div className="h-48 bg-accent-500 relative overflow-hidden">
                   <div className="absolute inset-0 bg-black bg-opacity-20"></div>
                   <div className="absolute top-4 right-4">
                     <div className="bg-white bg-opacity-90 rounded-full p-2">
-                      {getTravelIcon(tripData.trip.travel_mode)}
+                      {getTravelIcon(trip.travel_mode)}
                     </div>
                   </div>
                   <div className="absolute bottom-4 left-4 text-white">
                     <h3 className="text-xl font-bold font-display mb-1">
-                      {tripData.trip.name || 'Untitled Trip'}
+                      {trip.name || 'Untitled Trip'}
                     </h3>
                     <div className="flex items-center space-x-2 text-sm">
                       <Calendar className="h-4 w-4" />
-                      <span>{formatDate(tripData.trip.start_date)}</span>
+                      <span>{formatDate(trip.start_date)}</span>
                     </div>
                   </div>
                 </div>
@@ -391,18 +395,18 @@ const Dashboard = () => {
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div className="text-sm text-gray-600">
-                      {tripData.trip.start_date && tripData.trip.end_date && (
+                      {trip.start_date && trip.end_date && (
                         <span>
-                          {Math.ceil((new Date(tripData.trip.end_date) - new Date(tripData.trip.start_date)) / (1000 * 60 * 60 * 24))} days
+                          {Math.ceil((new Date(trip.end_date) - new Date(trip.start_date)) / (1000 * 60 * 60 * 24))} days
                         </span>
                       )}
                     </div>
                     <ChevronRight className="h-5 w-5 text-gray-400" />
                   </div>
                   
-                  {tripData.trip.tags && tripData.trip.tags.length > 0 && (
+                  {trip.tags && trip.tags.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-4">
-                      {tripData.trip.tags.slice(0, 3).map((tag, index) => (
+                      {trip.tags.slice(0, 3).map((tag, index) => (
                         <span
                           key={index}
                           className="px-2 py-1 bg-sage-100 text-sage-700 text-xs rounded-full font-medium"
@@ -410,9 +414,9 @@ const Dashboard = () => {
                           {tag}
                         </span>
                       ))}
-                      {tripData.trip.tags.length > 3 && (
+                      {trip.tags.length > 3 && (
                         <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full font-medium">
-                          +{tripData.trip.tags.length - 3}
+                          +{trip.tags.length - 3}
                         </span>
                       )}
                     </div>

@@ -53,7 +53,7 @@ const TripCard = ({ trip, onSelect }) => {
   return (
     <div className="card-hover cursor-pointer group" onClick={() => onSelect(trip)}>
       {/* Header Image */}
-      <div className="h-48 bg-gradient-to-br from-accent-400 via-accent-500 to-sage-500 relative overflow-hidden">
+      <div className="h-48 bg-accent-500 relative overflow-hidden">
         <div className="absolute inset-0 bg-black bg-opacity-20"></div>
         
         {/* Top Row Actions */}
@@ -144,7 +144,7 @@ const TripCard = ({ trip, onSelect }) => {
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div 
-                className="bg-gradient-to-r from-accent-500 to-sage-500 h-2 rounded-full transition-all duration-300"
+                className="bg-accent-500 h-2 rounded-full transition-all duration-300"
                 style={{ width: `${trip.completion_percentage}%` }}
               ></div>
             </div>
