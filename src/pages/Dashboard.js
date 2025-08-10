@@ -374,8 +374,8 @@ const Dashboard = () => {
                 className="card-hover cursor-pointer transform hover:scale-105 transition-all duration-200"
                 onClick={() => navigate(`/trip/${trip.id}`)}
               >
-                <div className="h-48 bg-accent-500 relative overflow-hidden">
-                  <div className="absolute inset-0 bg-black bg-opacity-20"></div>
+                <div className="h-48 bg-accent-400 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-opacity-20"></div>
                   <div className="absolute top-4 right-4">
                     <div className="bg-white bg-opacity-90 rounded-full p-2">
                       {getTravelIcon(trip.travel_mode)}

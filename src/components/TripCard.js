@@ -53,8 +53,8 @@ const TripCard = ({ trip, onSelect }) => {
   return (
     <div className="card-hover cursor-pointer group" onClick={() => onSelect(trip)}>
       {/* Header Image */}
-      <div className="h-48 bg-accent-500 relative overflow-hidden">
-        <div className="absolute inset-0 bg-black bg-opacity-20"></div>
+      <div className="h-48 bg-accent-700 relative overflow-hidden">
+        <div className="absolute inset-0 bg-opacity-20"></div>
         
         {/* Top Row Actions */}
         <div className="absolute top-4 left-4 right-4 flex justify-between items-start">
