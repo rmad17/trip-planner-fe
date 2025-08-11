@@ -23,40 +23,49 @@ export const authAPI = {
   googleLogin: () => `${API_BASE_URL}/auth/google/login`,
 };
 
-// Trip APIs
+// Trip APIs - Updated to match backend routing structure
 export const tripAPI = {
   createTrip: (tripData) => api.post('/trips/create', tripData),
-  getAllTrips: () => api.get('/trips'),
-  getTripById: (tripId) => api.get(`/trip/${tripId}`),
-  updateTrip: (tripId, tripData) => api.put(`/trip/${tripId}`, tripData),
-  deleteTrip: (tripId) => api.delete(`/trip/${tripId}`),
+  getAllTrips: () => api.get('/trips'), // Uses /trips GET endpoint
+  getTripById: (tripId) => api.get(`/trip/${tripId}`), // Uses /trip/:id
+  getTripComplete: (tripId) => api.get(`/trip/${tripId}/complete`), // Uses /trip/:id/complete
+  updateTrip: (tripId, tripData) => api.put(`/trip/${tripId}`, tripData), // Uses /trip/:id
+  deleteTrip: (tripId) => api.delete(`/trip/${tripId}`), // Uses /trip/:id
 };
 
-// Trip Hop APIs
+// Trip Hop APIs - Updated to match backend structure
 export const tripHopAPI = {
   createTripHop: (tripId, hopData) => api.post(`/trip/${tripId}/hops`, hopData),
   getTripHops: (tripId) => api.get(`/trip/${tripId}/hops`),
-  updateTripHop: (tripId, hopId, hopData) => api.put(`/trip/${tripId}/hops/${hopId}`, hopData),
-  deleteTripHop: (tripId, hopId) => api.delete(`/trip/${tripId}/hops/${hopId}`),
+  updateTripHop: (hopId, hopData) => api.put(`/trip-hops/${hopId}`, hopData), // Individual hop endpoint
+  deleteTripHop: (hopId) => api.delete(`/trip-hops/${hopId}`), // Individual hop endpoint
 };
 
-// Trip Day APIs
+// Trip Day APIs - Updated to match backend structure
 export const tripDayAPI = {
   createTripDay: (tripId, dayData) => api.post(`/trip/${tripId}/days`, dayData),
   getTripDays: (tripId) => api.get(`/trip/${tripId}/days`),
-  updateTripDay: (tripId, dayId, dayData) => api.put(`/trip/${tripId}/days/${dayId}`, dayData),
-  deleteTripDay: (tripId, dayId) => api.delete(`/trip/${tripId}/days/${dayId}`),
+  getTripDay: (dayId) => api.get(`/trip-days/${dayId}`), // Individual day endpoint
+  updateTripDay: (dayId, dayData) => api.put(`/trip-days/${dayId}`, dayData), // Individual day endpoint
+  deleteTripDay: (dayId) => api.delete(`/trip-days/${dayId}`), // Individual day endpoint
 };
 
-// Itinerary APIs
+// Itinerary APIs - Updated to match backend structure  
 export const itineraryAPI = {
-  createItinerary: (tripId, itineraryData) => api.post(`/trip/${tripId}/itinerary`, itineraryData),
   getItinerary: (tripId) => api.get(`/trip/${tripId}/itinerary`),
-  updateItinerary: (tripId, itineraryId, itineraryData) => api.put(`/trip/${tripId}/itinerary/${itineraryId}`, itineraryData),
-  deleteItinerary: (tripId, itineraryId) => api.delete(`/trip/${tripId}/itinerary/${itineraryId}`),
+  getItineraryByDay: (tripId, dayNumber) => api.get(`/trip/${tripId}/itinerary/day/${dayNumber}`),
+  getItineraryByDate: (tripId, date) => api.get(`/trip/${tripId}/itinerary?date=${date}`),
 };
 
-// Document Upload APIs
+// Activity APIs - New addition based on backend structure
+export const activityAPI = {
+  createActivity: (tripId, dayId, activityData) => api.post(`/trip-days/${dayId}/activities`, activityData),
+  getActivities: (dayId) => api.get(`/trip-days/${dayId}/activities`),
+  updateActivity: (activityId, activityData) => api.put(`/activities/${activityId}`, activityData),
+  deleteActivity: (activityId) => api.delete(`/activities/${activityId}`),
+};
+
+// Document Upload APIs - Keep as is for now (may need backend implementation)
 export const documentAPI = {
   uploadDocument: (tripId, formData) => api.post(`/trip/${tripId}/documents`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
@@ -68,26 +77,27 @@ export const documentAPI = {
   }),
 };
 
-// Stays APIs
+// Stays APIs - Updated to match backend structure
 export const staysAPI = {
-  createStay: (tripId, stayData) => api.post(`/trip/${tripId}/stays`, stayData),
-  getStays: (tripId) => api.get(`/trip/${tripId}/stays`),
-  updateStay: (tripId, stayId, stayData) => api.put(`/trip/${tripId}/stays/${stayId}`, stayData),
-  deleteStay: (tripId, stayId) => api.delete(`/trip/${tripId}/stays/${stayId}`),
+  createStay: (hopId, stayData) => api.post(`/trip-hops/${hopId}/stays`, stayData), // Stays are nested under hops
+  getStays: (hopId) => api.get(`/trip-hops/${hopId}/stays`), // Get stays for a specific hop
+  getStay: (stayId) => api.get(`/stays/${stayId}`), // Individual stay endpoint
+  updateStay: (stayId, stayData) => api.put(`/stays/${stayId}`, stayData), // Individual stay endpoint
+  deleteStay: (stayId) => api.delete(`/stays/${stayId}`), // Individual stay endpoint
 };
 
-// Expenses APIs
+// Expenses APIs - Updated to match backend structure  
 export const expensesAPI = {
-  createExpense: (tripId, expenseData) => api.post(`/trip/${tripId}/expenses`, expenseData),
-  getExpenses: (tripId) => api.get(`/trip/${tripId}/expenses`),
-  updateExpense: (tripId, expenseId, expenseData) => api.put(`/trip/${tripId}/expenses/${expenseId}`, expenseData),
-  deleteExpense: (tripId, expenseId) => api.delete(`/trip/${tripId}/expenses/${expenseId}`),
-  getExpensesSummary: (tripId) => api.get(`/trip/${tripId}/expenses/summary`),
+  createExpense: (tripId, expenseData) => api.post(`/trip-plans/${tripId}/expenses`, expenseData), // Uses trip-plans
+  getExpenses: (tripId) => api.get(`/trip-plans/${tripId}/expenses`), // Uses trip-plans
+  updateExpense: (expenseId, expenseData) => api.put(`/expenses/${expenseId}`, expenseData), // Individual expense endpoint
+  deleteExpense: (expenseId) => api.delete(`/expenses/${expenseId}`), // Individual expense endpoint
+  getExpensesSummary: (tripId) => api.get(`/trip-plans/${tripId}/expense-summary`), // Uses trip-plans
 };
 
 // Places APIs with enhanced search
 export const placesAPI = {
-  searchPlaces: (query) => api.get(`/places/autocomplete/search?q=${query}`),
+  searchPlaces: (query) => api.get(`/places/search?search_text=${query}`),
   getPlaceDetails: (placeId) => api.get(`/places/details?place_id=${placeId}`),
   getPlaceSuggestions: (lat, lng, type = 'tourist_attraction') => 
     api.get(`/places/nearby?lat=${lat}&lng=${lng}&type=${type}`),
