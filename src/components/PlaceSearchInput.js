@@ -31,8 +31,8 @@ const PlaceSearchInput = ({
 
     try {
       setIsLoading(true);
-      const response = await placesAPI.searchPlaces(searchQuery);
-      const predictions = response.data.predictions || [];
+      const response = await placesAPI.autocompleteSearch(searchQuery);
+      const predictions = response.data.predictions || response.data.results || response.data || [];
       setSuggestions(predictions);
       setShowSuggestions(predictions.length > 0);
       setSelectedIndex(-1);

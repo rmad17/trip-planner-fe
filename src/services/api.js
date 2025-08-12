@@ -37,17 +37,17 @@ export const tripAPI = {
 export const tripHopAPI = {
   createTripHop: (tripId, hopData) => api.post(`/trip/${tripId}/hops`, hopData),
   getTripHops: (tripId) => api.get(`/trip/${tripId}/hops`),
-  updateTripHop: (hopId, hopData) => api.put(`/trip-hops/${hopId}`, hopData), // Individual hop endpoint
-  deleteTripHop: (hopId) => api.delete(`/trip-hops/${hopId}`), // Individual hop endpoint
+  updateTripHop: (hopId, hopData) => api.put(`/hops/${hopId}`, hopData), // Individual hop endpoint
+  deleteTripHop: (hopId) => api.delete(`/hops/${hopId}`), // Individual hop endpoint
 };
 
 // Trip Day APIs - Updated to match backend structure
 export const tripDayAPI = {
   createTripDay: (tripId, dayData) => api.post(`/trip/${tripId}/days`, dayData),
   getTripDays: (tripId) => api.get(`/trip/${tripId}/days`),
-  getTripDay: (dayId) => api.get(`/trip-days/${dayId}`), // Individual day endpoint
-  updateTripDay: (dayId, dayData) => api.put(`/trip-days/${dayId}`, dayData), // Individual day endpoint
-  deleteTripDay: (dayId) => api.delete(`/trip-days/${dayId}`), // Individual day endpoint
+  getTripDay: (dayId) => api.get(`/days/${dayId}`), // Individual day endpoint
+  updateTripDay: (dayId, dayData) => api.put(`/days/${dayId}`, dayData), // Individual day endpoint
+  deleteTripDay: (dayId) => api.delete(`/days/${dayId}`), // Individual day endpoint
 };
 
 // Itinerary APIs - Updated to match backend structure  
@@ -57,10 +57,10 @@ export const itineraryAPI = {
   getItineraryByDate: (tripId, date) => api.get(`/trip/${tripId}/itinerary?date=${date}`),
 };
 
-// Activity APIs - New addition based on backend structure
+// Activity APIs - Updated to match backend structure
 export const activityAPI = {
-  createActivity: (tripId, dayId, activityData) => api.post(`/trip-days/${dayId}/activities`, activityData),
-  getActivities: (dayId) => api.get(`/trip-days/${dayId}/activities`),
+  createActivity: (tripId, activityData) => api.post(`/trip/${tripId}/activities`, activityData),
+  getActivities: (tripId) => api.get(`/trip/${tripId}/activities`),
   updateActivity: (activityId, activityData) => api.put(`/activities/${activityId}`, activityData),
   deleteActivity: (activityId) => api.delete(`/activities/${activityId}`),
 };
@@ -79,8 +79,8 @@ export const documentAPI = {
 
 // Stays APIs - Updated to match backend structure
 export const staysAPI = {
-  createStay: (hopId, stayData) => api.post(`/trip-hops/${hopId}/stays`, stayData), // Stays are nested under hops
-  getStays: (hopId) => api.get(`/trip-hops/${hopId}/stays`), // Get stays for a specific hop
+  createStay: (hopId, stayData) => api.post(`/hops/${hopId}/stays`, stayData), // Stays are nested under hops
+  getStays: (hopId) => api.get(`/hops/${hopId}/stays`), // Get stays for a specific hop
   getStay: (stayId) => api.get(`/stays/${stayId}`), // Individual stay endpoint
   updateStay: (stayId, stayData) => api.put(`/stays/${stayId}`, stayData), // Individual stay endpoint
   deleteStay: (stayId) => api.delete(`/stays/${stayId}`), // Individual stay endpoint
@@ -88,15 +88,16 @@ export const staysAPI = {
 
 // Expenses APIs - Updated to match backend structure  
 export const expensesAPI = {
-  createExpense: (tripId, expenseData) => api.post(`/trip-plans/${tripId}/expenses`, expenseData), // Uses trip-plans
-  getExpenses: (tripId) => api.get(`/trip-plans/${tripId}/expenses`), // Uses trip-plans
+  createExpense: (tripId, expenseData) => api.post(`/trip/${tripId}/expenses`, expenseData),
+  getExpenses: (tripId) => api.get(`/trip/${tripId}/expenses`),
   updateExpense: (expenseId, expenseData) => api.put(`/expenses/${expenseId}`, expenseData), // Individual expense endpoint
   deleteExpense: (expenseId) => api.delete(`/expenses/${expenseId}`), // Individual expense endpoint
-  getExpensesSummary: (tripId) => api.get(`/trip-plans/${tripId}/expense-summary`), // Uses trip-plans
+  getExpensesSummary: (tripId) => api.get(`/trip/${tripId}/expense-summary`),
 };
 
 // Places APIs with enhanced search
 export const placesAPI = {
+  autocompleteSearch: (query) => api.get(`/places/autocomplete/search?query=${encodeURIComponent(query)}`),
   searchPlaces: (query) => api.get(`/places/search?search_text=${query}`),
   getPlaceDetails: (placeId) => api.get(`/places/details?place_id=${placeId}`),
   getPlaceSuggestions: (lat, lng, type = 'tourist_attraction') => 

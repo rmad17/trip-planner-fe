@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { tripAPI } from '../services/api';
-import PlaceSearchInput from '../components/PlaceSearchInput';
+import { SearchBox } from '@mapbox/search-js-react';
 import { 
   Plus, 
   MapPin, 
@@ -203,16 +203,27 @@ const Dashboard = () => {
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Trip Name / Destination
                     </label>
-                    <PlaceSearchInput
+                    <SearchBox
+                      accessToken='pk.eyJ1Ijoicm1hZDE3IiwiYSI6ImNtMnRmZDl1NDAyYjkya3NmZ2oybGUyOTgifQ.MJp5NBYhCR_G2qzoVTzQMg'
                       value={newTrip.place_name}
-                      onChange={(value) => setNewTrip(prev => ({ ...prev, place_name: value }))}
+                      onChange={(value) => {
+                        setNewTrip(prev => ({ ...prev, place_name: value }));
+                      }}
+                      onRetrieve={(res) => {
+                        // onRetrieve receives SearchBoxRetrieveResponse with GeoJSON FeatureCollection
+                        const feature = res.features?.[0];
+                        if (feature) {
+                          const placeName = feature.properties?.full_address || feature.properties?.name || feature.place_name || '';
+                          setNewTrip(prev => ({ 
+                            ...prev, 
+                            place_name: placeName,
+                            destination: feature
+                          }));
+                        }
+                      }}
                       placeholder="e.g., Paris, Tokyo, European Adventure"
-                      onPlaceSelect={(place) => {
-                        setNewTrip(prev => ({ 
-                          ...prev, 
-                          place_name: place.description,
-                          destination: place 
-                        }));
+                      options={{
+                        language: 'en'
                       }}
                     />
                   </div>

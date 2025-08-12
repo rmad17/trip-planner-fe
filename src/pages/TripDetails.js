@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { SearchBox } from '@mapbox/search-js-react';
 import { 
   tripAPI, 
   tripHopAPI, 
@@ -74,7 +75,8 @@ const TripDetails = () => {
     country: '',
     start_date: '',
     end_date: '',
-    estimated_budget: ''
+    estimated_budget: '',
+    place_id: ''
   });
   
   // Form states for day management
@@ -85,6 +87,19 @@ const TripDetails = () => {
     day_type: 'explore',
     notes: '',
     estimated_budget: ''
+  });
+  
+  // Form states for activity management
+  const [newActivityData, setNewActivityData] = useState({
+    name: '',
+    description: '',
+    location: '',
+    start_time: '',
+    end_time: '',
+    estimated_cost: '',
+    activity_type: 'sightseeing',
+    notes: '',
+    day_id: ''
   });
 
   useEffect(() => {
@@ -137,7 +152,7 @@ const TripDetails = () => {
   const fetchTripHops = async () => {
     try {
       const response = await tripHopAPI.getTripHops(tripId);
-      setTripHops(response.data.hops || []);
+      setTripHops(response.data.trip_hops || []);
     } catch (error) {
       console.error('Error fetching trip hops:', error);
     }
@@ -146,7 +161,7 @@ const TripDetails = () => {
   const fetchTripDays = async () => {
     try {
       const response = await tripDayAPI.getTripDays(tripId);
-      setTripDays(response.data.days || []);
+      setTripDays(response.data.trip_days || []);
     } catch (error) {
       console.error('Error fetching trip days:', error);
     }
@@ -154,22 +169,15 @@ const TripDetails = () => {
 
   const fetchItinerary = async () => {
     try {
-      // First try to get itinerary from backend
+      // Get itinerary from backend
       const response = await itineraryAPI.getItinerary(tripId);
       
-      // Handle different response formats from the backend
-      let itineraryData = response.data;
-      if (itineraryData.itinerary) {
-        itineraryData = itineraryData.itinerary;
-      } else if (itineraryData.data) {
-        itineraryData = itineraryData.data;
-      }
-      
-      setItinerary(Array.isArray(itineraryData) ? itineraryData : []);
+      // Backend returns: {"itinerary": [...], "summary": {...}}
+      const itineraryData = response.data.itinerary || [];
+      setItinerary(itineraryData);
     } catch (error) {
-      // If itinerary endpoint fails, build it from trip days and activities
-      console.log('Itinerary endpoint not available, building from days and activities:', error.message);
-      await buildItineraryFromDays();
+      console.error('Error fetching itinerary:', error);
+      setItinerary([]);
     }
   };
 
@@ -177,22 +185,15 @@ const TripDetails = () => {
     try {
       const response = await itineraryAPI.getItineraryByDay(tripId, dayNumber);
       
-      // Handle different response formats from the backend
-      let dayItineraryData = response.data;
-      if (dayItineraryData.itinerary) {
-        dayItineraryData = dayItineraryData.itinerary;
-      } else if (dayItineraryData.data) {
-        dayItineraryData = dayItineraryData.data;
-      }
-      
+      // Backend returns the day data directly
       setSelectedDayItinerary({
         dayNumber,
-        data: dayItineraryData
+        data: response.data
       });
     } catch (error) {
       console.error(`Error fetching itinerary for day ${dayNumber}:`, error);
       // Fallback to finding the day in the general itinerary
-      const dayItinerary = itinerary.find(item => item.day?.day_number === dayNumber);
+      const dayItinerary = itinerary.find(item => item.day_number === dayNumber);
       setSelectedDayItinerary({
         dayNumber,
         data: dayItinerary || null
@@ -200,33 +201,6 @@ const TripDetails = () => {
     }
   };
 
-  const buildItineraryFromDays = async () => {
-    try {
-      if (tripDays.length === 0) return;
-      
-      // Fetch activities for each day
-      const itineraryPromises = tripDays.map(async (day) => {
-        try {
-          const activitiesResponse = await activityAPI.getActivities(day.id);
-          return {
-            day: day,
-            activities: activitiesResponse.data.activities || []
-          };
-        } catch (error) {
-          console.error(`Error fetching activities for day ${day.id}:`, error);
-          return {
-            day: day,
-            activities: []
-          };
-        }
-      });
-      
-      const itineraryData = await Promise.all(itineraryPromises);
-      setItinerary(itineraryData);
-    } catch (error) {
-      console.error('Error building itinerary from days:', error);
-    }
-  };
 
   const fetchDocuments = async () => {
     try {
@@ -420,7 +394,8 @@ const TripDetails = () => {
         country: '',
         start_date: '',
         end_date: '',
-        estimated_budget: ''
+        estimated_budget: '',
+        place_id: ''
       });
       setShowAddForms(prev => ({ ...prev, hop: false }));
       
@@ -522,6 +497,82 @@ const TripDetails = () => {
     } catch (error) {
       setError('Failed to delete day');
       console.error('Error deleting day:', error);
+    }
+  };
+
+  // Activity CRUD functions
+  const handleCreateActivity = async () => {
+    console.log('Activity form data:', newActivityData);
+    console.log('Trip days available:', tripDays.length);
+    
+    if (!newActivityData.day_id || !newActivityData.name) {
+      setError('Please select a day and enter activity name');
+      return;
+    }
+
+    try {
+      const activityData = {
+        name: newActivityData.name,
+        description: newActivityData.description,
+        location: newActivityData.location,
+        activity_type: newActivityData.activity_type,
+        notes: newActivityData.notes,
+        trip_day_id: newActivityData.day_id, // Maps day_id from form to trip_day_id for backend
+        estimated_cost: newActivityData.estimated_cost ? parseFloat(newActivityData.estimated_cost) : null,
+        start_time: newActivityData.start_time ? new Date(`1970-01-01T${newActivityData.start_time}:00`).toISOString() : null,
+        end_time: newActivityData.end_time ? new Date(`1970-01-01T${newActivityData.end_time}:00`).toISOString() : null,
+      };
+      
+      await activityAPI.createActivity(tripId, activityData);
+      
+      // Reset form and close
+      setNewActivityData({
+        name: '',
+        description: '',
+        location: '',
+        start_time: '',
+        end_time: '',
+        estimated_cost: '',
+        activity_type: 'sightseeing',
+        notes: '',
+        day_id: ''
+      });
+      setShowAddForms(prev => ({ ...prev, activity: false }));
+      
+      // Refresh itinerary to show new activity
+      await fetchItinerary();
+    } catch (error) {
+      setError('Failed to create activity');
+      console.error('Error creating activity:', error);
+    }
+  };
+
+  const handleUpdateActivity = async (activityId, updatedData) => {
+    try {
+      const activityData = {
+        ...updatedData,
+        estimated_cost: updatedData.estimated_cost ? parseFloat(updatedData.estimated_cost) : null,
+        start_time: updatedData.start_time ? new Date(`1970-01-01T${updatedData.start_time}:00`).toISOString() : null,
+        end_time: updatedData.end_time ? new Date(`1970-01-01T${updatedData.end_time}:00`).toISOString() : null,
+      };
+      
+      await activityAPI.updateActivity(activityId, activityData);
+      await fetchItinerary();
+    } catch (error) {
+      setError('Failed to update activity');
+      console.error('Error updating activity:', error);
+    }
+  };
+
+  const handleDeleteActivity = async (activityId) => {
+    if (!window.confirm('Are you sure you want to delete this activity?')) return;
+    
+    try {
+      await activityAPI.deleteActivity(activityId);
+      await fetchItinerary();
+    } catch (error) {
+      setError('Failed to delete activity');
+      console.error('Error deleting activity:', error);
     }
   };
 
@@ -887,24 +938,42 @@ const TripDetails = () => {
                           placeholder="e.g., Paris Visit"
                         />
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
-                        <input
-                          type="text"
-                          value={newHopData.city}
-                          onChange={(e) => setNewHopData(prev => ({ ...prev, city: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                          placeholder="e.g., Paris"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Country *</label>
-                        <input
-                          type="text"
-                          value={newHopData.country}
-                          onChange={(e) => setNewHopData(prev => ({ ...prev, country: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                          placeholder="e.g., France"
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Location (City, Country) *</label>
+                        <SearchBox
+                          accessToken='pk.eyJ1Ijoicm1hZDE3IiwiYSI6ImNtMnRmZDl1NDAyYjkya3NmZ2oybGUyOTgifQ.MJp5NBYhCR_G2qzoVTzQMg'
+                          value={newHopData.city ? `${newHopData.city}, ${newHopData.country}` : ''}
+                          onSuggest={(res) => {
+                            // onSuggest receives SearchBoxSuggestionResponse - handle typing but wait for onRetrieve for final data
+                          }}
+                          onRetrieve={(res) => {
+                            // onRetrieve receives SearchBoxRetrieveResponse with GeoJSON FeatureCollection
+                            const feature = res.features?.[0];
+                            if (feature) {
+                              const fullAddress = feature.properties?.full_address || feature.properties?.name || feature.place_name || '';
+                              const parts = fullAddress.split(',');
+                              
+                              if (parts.length >= 2) {
+                                setNewHopData(prev => ({
+                                  ...prev,
+                                  city: parts[0].trim(),
+                                  country: parts.slice(-1)[0].trim(),
+                                  place_id: feature.id
+                                }));
+                              } else {
+                                setNewHopData(prev => ({
+                                  ...prev,
+                                  city: fullAddress,
+                                  country: '',
+                                  place_id: feature.id
+                                }));
+                              }
+                            }
+                          }}
+                          placeholder="e.g., Paris, France"
+                          options={{
+                            language: 'en'
+                          }}
                         />
                       </div>
                       <div>
@@ -986,20 +1055,41 @@ const TripDetails = () => {
                                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                                 />
                               </div>
-                              <div className="grid grid-cols-2 gap-2">
-                                <input
-                                  type="text"
-                                  value={editingHop.city || ''}
-                                  onChange={(e) => setEditingHop(prev => ({ ...prev, city: e.target.value }))}
-                                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                                  placeholder="City"
-                                />
-                                <input
-                                  type="text"
-                                  value={editingHop.country || ''}
-                                  onChange={(e) => setEditingHop(prev => ({ ...prev, country: e.target.value }))}
-                                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                                  placeholder="Country"
+                              <div>
+                                <SearchBox
+                                  accessToken='pk.eyJ1Ijoicm1hZDE3IiwiYSI6ImNtMnRmZDl1NDAyYjkya3NmZ2oybGUyOTgifQ.MJp5NBYhCR_G2qzoVTzQMg'
+                                  value={editingHop.city && editingHop.country ? `${editingHop.city}, ${editingHop.country}` : editingHop.city || ''}
+                                  onSuggest={(res) => {
+                                    // onSuggest receives SearchBoxSuggestionResponse - handle typing but wait for onRetrieve for final data
+                                  }}
+                                  onRetrieve={(res) => {
+                                    // onRetrieve receives SearchBoxRetrieveResponse with GeoJSON FeatureCollection
+                                    const feature = res.features?.[0];
+                                    if (feature) {
+                                      const fullAddress = feature.properties?.full_address || feature.properties?.name || feature.place_name || '';
+                                      const parts = fullAddress.split(',');
+                                      
+                                      if (parts.length >= 2) {
+                                        setEditingHop(prev => ({
+                                          ...prev,
+                                          city: parts[0].trim(),
+                                          country: parts.slice(-1)[0].trim(),
+                                          place_id: feature.id
+                                        }));
+                                      } else {
+                                        setEditingHop(prev => ({
+                                          ...prev,
+                                          city: fullAddress,
+                                          place_id: feature.id
+                                        }));
+                                      }
+                                    }
+                                  }}
+                                  placeholder="City, Country"
+                                  options={{
+                                    language: 'en',
+                                    country: 'US'
+                                  }}
                                 />
                               </div>
                               <textarea
@@ -1298,7 +1388,7 @@ const TripDetails = () => {
                           <div className="p-4">
                             {/* Find activities for this day from itinerary */}
                             {(() => {
-                              const dayItinerary = itinerary.find(item => item.day?.id === day.id);
+                              const dayItinerary = itinerary.find(item => item.day_number === day.day_number);
                               const activities = dayItinerary?.activities || [];
                               
                               if (activities.length === 0) {
@@ -1316,19 +1406,37 @@ const TripDetails = () => {
                                       <Clock className="h-4 w-4 text-gray-400 mt-0.5" />
                                       <div className="flex-1">
                                         <div className="flex justify-between items-start">
-                                          <div>
+                                          <div className="flex-1">
                                             <h4 className="font-medium text-gray-900 text-sm">{activity.name}</h4>
                                             {activity.description && (
                                               <p className="text-xs text-gray-600 mt-1">{activity.description}</p>
                                             )}
                                           </div>
-                                          <div className="text-xs text-gray-500 text-right">
-                                            {activity.start_time && (
-                                              <div>{new Date(activity.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                                            )}
-                                            {activity.estimated_cost && (
-                                              <div className="mt-1">{formatCurrency(activity.estimated_cost)}</div>
-                                            )}
+                                          <div className="flex items-center space-x-2">
+                                            <div className="text-xs text-gray-500 text-right">
+                                              {activity.start_time && (
+                                                <div>{new Date(activity.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                              )}
+                                              {activity.estimated_cost && (
+                                                <div className="mt-1">{formatCurrency(activity.estimated_cost)}</div>
+                                              )}
+                                            </div>
+                                            <div className="flex items-center space-x-1">
+                                              <button
+                                                onClick={() => console.log('Edit activity:', activity.id)}
+                                                className="text-primary-600 hover:text-primary-700 p-0.5"
+                                                title="Edit activity"
+                                              >
+                                                <Edit3 className="h-3 w-3" />
+                                              </button>
+                                              <button
+                                                onClick={() => handleDeleteActivity(activity.id)}
+                                                className="text-red-600 hover:text-red-700 p-0.5"
+                                                title="Delete activity"
+                                              >
+                                                <Trash2 className="h-3 w-3" />
+                                              </button>
+                                            </div>
                                           </div>
                                         </div>
                                         {activity.location && (
@@ -1415,6 +1523,174 @@ const TripDetails = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* Add Activity Form */}
+                {showAddForms.activity && (
+                  <div className="border-b border-gray-200 p-6 bg-gray-50">
+                    <h3 className="text-lg font-medium text-gray-900 mb-4">Add New Activity</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Activity Name *</label>
+                        <input
+                          type="text"
+                          value={newActivityData.name}
+                          onChange={(e) => setNewActivityData(prev => ({ ...prev, name: e.target.value }))}
+                          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+                            !newActivityData.name ? 'border-red-300' : 'border-gray-300'
+                          }`}
+                          placeholder="e.g., Visit Eiffel Tower"
+                        />
+                        {!newActivityData.name && (
+                          <p className="text-sm text-red-600 mt-1">Activity name is required</p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Day *</label>
+                        <select
+                          value={newActivityData.day_id}
+                          onChange={(e) => setNewActivityData(prev => ({ ...prev, day_id: e.target.value }))}
+                          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+                            !newActivityData.day_id ? 'border-red-300' : 'border-gray-300'
+                          }`}
+                        >
+                          <option value="">Select a day</option>
+                          {tripDays.sort((a, b) => a.day_number - b.day_number).map(day => (
+                            <option key={day.id} value={day.id}>
+                              Day {day.day_number} - {formatDate(day.date)}
+                            </option>
+                          ))}
+                        </select>
+                        {tripDays.length === 0 && (
+                          <p className="text-sm text-amber-600 mt-1 flex items-center">
+                            <Clock className="h-4 w-4 mr-1" />
+                            No days created yet. Go to "Daily Plans" tab to create days first.
+                          </p>
+                        )}
+                        {tripDays.length > 0 && !newActivityData.day_id && (
+                          <p className="text-sm text-red-600 mt-1">Please select a day</p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Activity Type</label>
+                        <select
+                          value={newActivityData.activity_type}
+                          onChange={(e) => setNewActivityData(prev => ({ ...prev, activity_type: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        >
+                          <option value="sightseeing">Sightseeing</option>
+                          <option value="dining">Dining</option>
+                          <option value="shopping">Shopping</option>
+                          <option value="entertainment">Entertainment</option>
+                          <option value="transport">Transport</option>
+                          <option value="accommodation">Accommodation</option>
+                          <option value="adventure">Adventure</option>
+                          <option value="cultural">Cultural</option>
+                          <option value="relaxation">Relaxation</option>
+                          <option value="business">Business</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Cost</label>
+                        <input
+                          type="number"
+                          value={newActivityData.estimated_cost}
+                          onChange={(e) => setNewActivityData(prev => ({ ...prev, estimated_cost: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                        <input
+                          type="time"
+                          value={newActivityData.start_time}
+                          onChange={(e) => setNewActivityData(prev => ({ ...prev, start_time: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                        <input
+                          type="time"
+                          value={newActivityData.end_time}
+                          onChange={(e) => setNewActivityData(prev => ({ ...prev, end_time: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                        <SearchBox
+                          accessToken='pk.eyJ1Ijoicm1hZDE3IiwiYSI6ImNtMnRmZDl1NDAyYjkya3NmZ2oybGUyOTgifQ.MJp5NBYhCR_G2qzoVTzQMg'
+                          value={newActivityData.location}
+                          onSuggest={(res) => {
+                            // onSuggest receives SearchBoxSuggestionResponse - handle typing but wait for onRetrieve for final data
+                          }}
+                          onRetrieve={(res) => {
+                            // onRetrieve receives SearchBoxRetrieveResponse with GeoJSON FeatureCollection
+                            const feature = res.features?.[0];
+                            if (feature) {
+                              const location = feature.properties?.full_address || feature.properties?.name || feature.place_name || '';
+                              setNewActivityData(prev => ({ ...prev, location: location }));
+                            }
+                          }}
+                          placeholder="Search for a location..."
+                          options={{
+                            language: 'en'
+                          }}
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                        <textarea
+                          value={newActivityData.description}
+                          onChange={(e) => setNewActivityData(prev => ({ ...prev, description: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                          rows="3"
+                          placeholder="Describe the activity..."
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                        <textarea
+                          value={newActivityData.notes}
+                          onChange={(e) => setNewActivityData(prev => ({ ...prev, notes: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                          rows="2"
+                          placeholder="Additional notes..."
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end space-x-3 mt-4">
+                      <button
+                        onClick={() => setShowAddForms(prev => ({ ...prev, activity: false }))}
+                        className="btn-secondary"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleCreateActivity}
+                        className={`px-4 py-2 rounded-lg font-medium ${
+                          !newActivityData.name || !newActivityData.day_id
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : 'bg-primary-600 text-white hover:bg-primary-700'
+                        }`}
+                        disabled={!newActivityData.name || !newActivityData.day_id}
+                        title={
+                          !newActivityData.name
+                            ? 'Please enter an activity name'
+                            : !newActivityData.day_id
+                            ? tripDays.length === 0
+                              ? 'No days available. Create a day first.'
+                              : 'Please select a day'
+                            : 'Add Activity'
+                        }
+                      >
+                        Add Activity
+                      </button>
+                    </div>
+                  </div>
+                )}
                 
                 <div className="p-6">
                   {/* All Days View */}
@@ -1429,24 +1705,29 @@ const TripDetails = () => {
                       ) : (
                         <div className="space-y-6">
                           {itinerary.map((dayItem) => (
-                            <div key={dayItem.day?.id || Math.random()} className="border border-gray-200 rounded-lg">
+                            <div key={dayItem.day_number || Math.random()} className="border border-gray-200 rounded-lg">
                               <div className="p-4 bg-gray-50 border-b border-gray-200">
                                 <div className="flex justify-between items-center">
                                   <div className="flex items-center space-x-3">
                                     <div className="bg-primary-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-medium">
-                                      {dayItem.day?.day_number || '?'}
+                                      {dayItem.day_number || '?'}
                                     </div>
                                     <div>
                                       <h3 className="font-semibold text-gray-900">
-                                        {dayItem.day?.title || `Day ${dayItem.day?.day_number || '?'}`}
+                                        {dayItem.title || `Day ${dayItem.day_number || '?'}`}
                                       </h3>
-                                      <p className="text-sm text-gray-600">{formatDate(dayItem.day?.date)}</p>
+                                      <p className="text-sm text-gray-600">{dayItem.date}</p>
                                     </div>
                                   </div>
                                   <div className="text-sm text-gray-600">
-                                    {dayItem.activities?.length || 0} activities
+                                    {dayItem.activity_count || 0} activities
                                   </div>
                                 </div>
+                                {dayItem.notes && (
+                                  <div className="mt-2 text-sm text-gray-600">
+                                    {dayItem.notes}
+                                  </div>
+                                )}
                               </div>
                               <div className="p-4">
                                 {!dayItem.activities || dayItem.activities.length === 0 ? (
@@ -1458,19 +1739,37 @@ const TripDetails = () => {
                                         <Clock className="h-4 w-4 text-gray-400 mt-0.5" />
                                         <div className="flex-1">
                                           <div className="flex justify-between items-start">
-                                            <div>
+                                            <div className="flex-1">
                                               <h4 className="font-medium text-gray-900">{activity.name || activity.title}</h4>
                                               {activity.description && (
                                                 <p className="text-sm text-gray-600 mt-1">{activity.description}</p>
                                               )}
                                             </div>
-                                            <div className="text-sm text-gray-500 text-right">
-                                              {activity.start_time && (
-                                                <div>{new Date(activity.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                                              )}
-                                              {activity.estimated_cost && (
-                                                <div className="mt-1">{formatCurrency(activity.estimated_cost)}</div>
-                                              )}
+                                            <div className="flex items-center space-x-2">
+                                              <div className="text-sm text-gray-500 text-right">
+                                                {activity.start_time && (
+                                                  <div>{new Date(activity.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                                )}
+                                                {activity.estimated_cost && (
+                                                  <div className="mt-1">{formatCurrency(activity.estimated_cost)}</div>
+                                                )}
+                                              </div>
+                                              <div className="flex items-center space-x-1 ml-2">
+                                                <button
+                                                  onClick={() => console.log('Edit activity:', activity.id)}
+                                                  className="text-primary-600 hover:text-primary-700 p-1"
+                                                  title="Edit activity"
+                                                >
+                                                  <Edit3 className="h-3 w-3" />
+                                                </button>
+                                                <button
+                                                  onClick={() => handleDeleteActivity(activity.id)}
+                                                  className="text-red-600 hover:text-red-700 p-1"
+                                                  title="Delete activity"
+                                                >
+                                                  <Trash2 className="h-3 w-3" />
+                                                </button>
+                                              </div>
                                             </div>
                                           </div>
                                           {activity.location && (
@@ -1514,12 +1813,12 @@ const TripDetails = () => {
                                     Day {selectedDayItinerary.dayNumber} Details
                                   </h3>
                                   <p className="text-sm text-gray-600">
-                                    {selectedDayItinerary.data?.day ? formatDate(selectedDayItinerary.data.day.date) : 'Date not available'}
+                                    {selectedDayItinerary.data?.date || 'Date not available'}
                                   </p>
                                 </div>
                               </div>
                               <div className="text-sm text-gray-600">
-                                {selectedDayItinerary.data?.activities?.length || 0} activities
+                                {selectedDayItinerary.data?.summary?.activity_count || selectedDayItinerary.data?.activities?.length || 0} activities
                               </div>
                             </div>
                           </div>
@@ -1533,19 +1832,37 @@ const TripDetails = () => {
                                     <Clock className="h-4 w-4 text-gray-400 mt-0.5" />
                                     <div className="flex-1">
                                       <div className="flex justify-between items-start">
-                                        <div>
+                                        <div className="flex-1">
                                           <h4 className="font-medium text-gray-900">{activity.name || activity.title}</h4>
                                           {activity.description && (
                                             <p className="text-sm text-gray-600 mt-1">{activity.description}</p>
                                           )}
                                         </div>
-                                        <div className="text-sm text-gray-500 text-right">
-                                          {activity.start_time && (
-                                            <div>{new Date(activity.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                                          )}
-                                          {activity.estimated_cost && (
-                                            <div className="mt-1">{formatCurrency(activity.estimated_cost)}</div>
-                                          )}
+                                        <div className="flex items-center space-x-2">
+                                          <div className="text-sm text-gray-500 text-right">
+                                            {activity.start_time && (
+                                              <div>{new Date(activity.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                            )}
+                                            {activity.estimated_cost && (
+                                              <div className="mt-1">{formatCurrency(activity.estimated_cost)}</div>
+                                            )}
+                                          </div>
+                                          <div className="flex items-center space-x-1 ml-2">
+                                            <button
+                                              onClick={() => console.log('Edit activity:', activity.id)}
+                                              className="text-primary-600 hover:text-primary-700 p-1"
+                                              title="Edit activity"
+                                            >
+                                              <Edit3 className="h-3 w-3" />
+                                            </button>
+                                            <button
+                                              onClick={() => handleDeleteActivity(activity.id)}
+                                              className="text-red-600 hover:text-red-700 p-1"
+                                              title="Delete activity"
+                                            >
+                                              <Trash2 className="h-3 w-3" />
+                                            </button>
+                                          </div>
                                         </div>
                                       </div>
                                       {activity.location && (
