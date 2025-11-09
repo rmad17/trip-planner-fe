@@ -8,21 +8,30 @@
   html {
     @apply antialiased;
   }
-  
+
   body {
     @apply bg-gray-50 text-gray-700 font-sans;
     margin: 0;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
-  
+
   * {
     @apply border-gray-200;
   }
-  
+
   code {
     font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
       monospace;
+  }
+
+  /* Fix text selection colors to prevent white-on-white */
+  ::selection {
+    @apply bg-primary-600 text-white;
+  }
+
+  ::-moz-selection {
+    @apply bg-primary-600 text-white;
   }
 }
 
