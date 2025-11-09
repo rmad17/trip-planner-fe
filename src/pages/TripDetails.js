@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import PlaceSearchInput from '../components/PlaceSearchInput';
+import ProfileButton from '../components/ProfileButton';
 import {
   tripAPI,
   tripHopAPI,
@@ -47,6 +48,7 @@ const TripDetails = () => {
   
   // Edit modes
   const [isEditingTrip, setIsEditingTrip] = useState(false);
+  const [isEditingOverview, setIsEditingOverview] = useState(false);
   const [editedTrip, setEditedTrip] = useState({});
   
   // Sections data
@@ -99,6 +101,32 @@ const TripDetails = () => {
     activity_type: 'sightseeing',
     notes: '',
     day_id: ''
+  });
+
+  // Form states for expense management
+  const [editingExpense, setEditingExpense] = useState(null);
+  const [newExpenseData, setNewExpenseData] = useState({
+    title: '',
+    description: '',
+    category: 'food',
+    amount: '',
+    currency: 'USD',
+    date: new Date().toISOString().split('T')[0],
+    location: '',
+    payment_method: 'card',
+    notes: ''
+  });
+
+  // Form states for stay/accommodation management
+  const [editingStay, setEditingStay] = useState(null);
+  const [newStayData, setNewStayData] = useState({
+    name: '',
+    address: '',
+    check_in: '',
+    check_out: '',
+    cost: '',
+    notes: '',
+    trip_hop: ''
   });
 
   useEffect(() => {
@@ -566,13 +594,134 @@ const TripDetails = () => {
 
   const handleDeleteActivity = async (activityId) => {
     if (!window.confirm('Are you sure you want to delete this activity?')) return;
-    
+
     try {
       await activityAPI.deleteActivity(activityId);
       await fetchItinerary();
     } catch (error) {
       setError('Failed to delete activity');
       console.error('Error deleting activity:', error);
+    }
+  };
+
+  // Expense CRUD handlers
+  const handleCreateExpense = async () => {
+    try {
+      const expenseData = {
+        ...newExpenseData,
+        amount: parseFloat(newExpenseData.amount) || 0,
+        date: newExpenseData.date ? new Date(newExpenseData.date).toISOString() : new Date().toISOString()
+      };
+
+      await expensesAPI.createExpense(tripId, expenseData);
+      setNewExpenseData({
+        title: '',
+        description: '',
+        category: 'food',
+        amount: '',
+        currency: 'USD',
+        date: new Date().toISOString().split('T')[0],
+        location: '',
+        payment_method: 'card',
+        notes: ''
+      });
+      setShowAddForms(prev => ({ ...prev, expense: false }));
+      await fetchExpenses();
+    } catch (error) {
+      setError('Failed to create expense');
+      console.error('Error creating expense:', error);
+    }
+  };
+
+  const handleUpdateExpense = async (expenseId, updatedData) => {
+    try {
+      const expenseData = {
+        ...updatedData,
+        amount: parseFloat(updatedData.amount) || 0,
+        date: updatedData.date ? new Date(updatedData.date).toISOString() : null
+      };
+
+      await expensesAPI.updateExpense(expenseId, expenseData);
+      setEditingExpense(null);
+      await fetchExpenses();
+    } catch (error) {
+      setError('Failed to update expense');
+      console.error('Error updating expense:', error);
+    }
+  };
+
+  const handleDeleteExpense = async (expenseId) => {
+    if (!window.confirm('Are you sure you want to delete this expense?')) return;
+
+    try {
+      await expensesAPI.deleteExpense(expenseId);
+      await fetchExpenses();
+    } catch (error) {
+      setError('Failed to delete expense');
+      console.error('Error deleting expense:', error);
+    }
+  };
+
+  // Stay/Accommodation CRUD handlers
+  const handleCreateStay = async () => {
+    if (!newStayData.trip_hop) {
+      setError('Please select a destination for this accommodation');
+      return;
+    }
+
+    try {
+      const stayData = {
+        ...newStayData,
+        cost: newStayData.cost ? parseFloat(newStayData.cost) : null,
+        check_in: newStayData.check_in ? new Date(newStayData.check_in).toISOString() : null,
+        check_out: newStayData.check_out ? new Date(newStayData.check_out).toISOString() : null
+      };
+
+      await staysAPI.createStay(newStayData.trip_hop, stayData);
+      setNewStayData({
+        name: '',
+        address: '',
+        check_in: '',
+        check_out: '',
+        cost: '',
+        notes: '',
+        trip_hop: ''
+      });
+      setShowAddForms(prev => ({ ...prev, stay: false }));
+      await fetchStays();
+    } catch (error) {
+      setError('Failed to create accommodation');
+      console.error('Error creating stay:', error);
+    }
+  };
+
+  const handleUpdateStay = async (stayId, updatedData) => {
+    try {
+      const stayData = {
+        ...updatedData,
+        cost: updatedData.cost ? parseFloat(updatedData.cost) : null,
+        check_in: updatedData.check_in ? new Date(updatedData.check_in).toISOString() : null,
+        check_out: updatedData.check_out ? new Date(updatedData.check_out).toISOString() : null
+      };
+
+      await staysAPI.updateStay(stayId, stayData);
+      setEditingStay(null);
+      await fetchStays();
+    } catch (error) {
+      setError('Failed to update accommodation');
+      console.error('Error updating stay:', error);
+    }
+  };
+
+  const handleDeleteStay = async (stayId) => {
+    if (!window.confirm('Are you sure you want to delete this accommodation?')) return;
+
+    try {
+      await staysAPI.deleteStay(stayId);
+      await fetchStays();
+    } catch (error) {
+      setError('Failed to delete accommodation');
+      console.error('Error deleting stay:', error);
     }
   };
 
@@ -699,12 +848,7 @@ const TripDetails = () => {
                 </p>
               </div>
             </div>
-            <button
-              onClick={logout}
-              className="btn-secondary"
-            >
-              Logout
-            </button>
+            <ProfileButton />
           </div>
         </div>
       </header>
@@ -742,61 +886,189 @@ const TripDetails = () => {
           <div className="flex-1">
             {activeSection === 'overview' && (
               <div className="card">
-                <div className="px-6 py-4 border-b border-gray-200">
+                <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
                   <h2 className="text-xl font-bold text-gray-900 font-display">Trip Overview</h2>
-                </div>
-                <div className="p-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                    <div>
-                      <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                        Duration
-                      </h3>
-                      <div className="flex items-center space-x-2 text-lg text-gray-900">
-                        <Calendar className="h-5 w-5 text-gray-400" />
-                        <span>{formatDate(tripData.start_date)} - {formatDate(tripData.end_date)}</span>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                        Travel Mode
-                      </h3>
-                      <div className="flex items-center space-x-2 text-lg text-gray-900">
-                        {getTravelIcon(tripData.travel_mode)}
-                        <span className="capitalize">{tripData.travel_mode || 'Not specified'}</span>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                        Budget
-                      </h3>
-                      <div className="flex items-center space-x-2 text-lg text-gray-900">
-                        <DollarSign className="h-5 w-5 text-gray-400" />
-                        <span>{expensesSummary ? formatCurrency(expensesSummary.total) : 'Not set'}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {tripData.notes && (
-                    <div className="mb-6">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-3">Notes</h3>
-                      <p className="text-gray-700 bg-gray-50 rounded-lg p-4">{tripData.notes}</p>
+                  {!isEditingOverview ? (
+                    <button
+                      onClick={() => {
+                        setIsEditingOverview(true);
+                        setEditedTrip({
+                          ...tripData,
+                          start_date: tripData.start_date ? new Date(tripData.start_date).toISOString().split('T')[0] : '',
+                          end_date: tripData.end_date ? new Date(tripData.end_date).toISOString().split('T')[0] : '',
+                          tags: Array.isArray(tripData.tags) ? tripData.tags.join(', ') : ''
+                        });
+                      }}
+                      className="btn-secondary flex items-center space-x-2"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                      <span>Edit</span>
+                    </button>
+                  ) : (
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={async () => {
+                          try {
+                            const updateData = {
+                              ...editedTrip,
+                              start_date: editedTrip.start_date ? new Date(editedTrip.start_date).toISOString() : null,
+                              end_date: editedTrip.end_date ? new Date(editedTrip.end_date).toISOString() : null,
+                              tags: typeof editedTrip.tags === 'string'
+                                ? editedTrip.tags.split(',').map(t => t.trim()).filter(t => t)
+                                : editedTrip.tags
+                            };
+                            await tripAPI.updateTrip(tripId, updateData);
+                            await fetchTripDetails();
+                            setIsEditingOverview(false);
+                          } catch (error) {
+                            setError('Failed to update trip');
+                            console.error('Error updating trip:', error);
+                          }
+                        }}
+                        className="btn-primary flex items-center space-x-2"
+                      >
+                        <Save className="h-4 w-4" />
+                        <span>Save</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsEditingOverview(false);
+                          setEditedTrip({});
+                        }}
+                        className="btn-secondary flex items-center space-x-2"
+                      >
+                        <X className="h-4 w-4" />
+                        <span>Cancel</span>
+                      </button>
                     </div>
                   )}
+                </div>
+                <div className="p-6">
+                  {!isEditingOverview ? (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                        <div>
+                          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                            Duration
+                          </h3>
+                          <div className="flex items-center space-x-2 text-lg text-gray-900">
+                            <Calendar className="h-5 w-5 text-gray-400" />
+                            <span>{formatDate(tripData.start_date)} - {formatDate(tripData.end_date)}</span>
+                          </div>
+                        </div>
 
-                  {tripData.tags && tripData.tags.length > 0 && (
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-3">Tags</h3>
-                      <div className="flex flex-wrap gap-2">
-                        {tripData.tags.map((tag, index) => (
-                          <span
-                            key={index}
-                            className="px-3 py-1 bg-accent-100 text-accent-700 text-sm rounded-full font-medium"
-                          >
-                            #{tag}
-                          </span>
-                        ))}
+                        <div>
+                          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                            Travel Mode
+                          </h3>
+                          <div className="flex items-center space-x-2 text-lg text-gray-900">
+                            {getTravelIcon(tripData.travel_mode)}
+                            <span className="capitalize">{tripData.travel_mode || 'Not specified'}</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                            Budget
+                          </h3>
+                          <div className="flex items-center space-x-2 text-lg text-gray-900">
+                            <DollarSign className="h-5 w-5 text-gray-400" />
+                            <span>{expensesSummary ? formatCurrency(expensesSummary.total) : 'Not set'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {tripData.notes && (
+                        <div className="mb-6">
+                          <h3 className="text-lg font-semibold text-gray-900 mb-3">Notes</h3>
+                          <p className="text-gray-700 bg-gray-50 rounded-lg p-4">{tripData.notes}</p>
+                        </div>
+                      )}
+
+                      {tripData.tags && tripData.tags.length > 0 && (
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-3">Tags</h3>
+                          <div className="flex flex-wrap gap-2">
+                            {tripData.tags.map((tag, index) => (
+                              <span
+                                key={index}
+                                className="px-3 py-1 bg-accent-100 text-accent-700 text-sm rounded-full font-medium"
+                              >
+                                #{tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Start Date
+                          </label>
+                          <input
+                            type="date"
+                            value={editedTrip.start_date || ''}
+                            onChange={(e) => setEditedTrip(prev => ({ ...prev, start_date: e.target.value }))}
+                            className="input-field"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            End Date
+                          </label>
+                          <input
+                            type="date"
+                            value={editedTrip.end_date || ''}
+                            onChange={(e) => setEditedTrip(prev => ({ ...prev, end_date: e.target.value }))}
+                            className="input-field"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Travel Mode
+                        </label>
+                        <select
+                          value={editedTrip.travel_mode || ''}
+                          onChange={(e) => setEditedTrip(prev => ({ ...prev, travel_mode: e.target.value }))}
+                          className="input-field"
+                        >
+                          <option value="">Select travel mode</option>
+                          <option value="flight">Flight</option>
+                          <option value="car">Car</option>
+                          <option value="train">Train</option>
+                          <option value="bus">Bus</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Notes
+                        </label>
+                        <textarea
+                          value={editedTrip.notes || ''}
+                          onChange={(e) => setEditedTrip(prev => ({ ...prev, notes: e.target.value }))}
+                          rows="4"
+                          className="input-field resize-none"
+                          placeholder="Add trip notes..."
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Tags (comma-separated)
+                        </label>
+                        <input
+                          type="text"
+                          value={editedTrip.tags || ''}
+                          onChange={(e) => setEditedTrip(prev => ({ ...prev, tags: e.target.value }))}
+                          className="input-field"
+                          placeholder="e.g., romantic, adventure, cultural"
+                        />
                       </div>
                     </div>
                   )}
@@ -848,8 +1120,134 @@ const TripDetails = () => {
                   </div>
                 )}
 
+                {/* Add Expense Form */}
+                {showAddForms.expense && (
+                  <div className="border-b border-gray-200 p-6 bg-gray-50">
+                    <h3 className="text-lg font-medium text-gray-900 mb-4">Add New Expense</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                        <input
+                          type="text"
+                          value={newExpenseData.title}
+                          onChange={(e) => setNewExpenseData(prev => ({ ...prev, title: e.target.value }))}
+                          className="input-field"
+                          placeholder="e.g., Dinner at restaurant"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+                        <select
+                          value={newExpenseData.category}
+                          onChange={(e) => setNewExpenseData(prev => ({ ...prev, category: e.target.value }))}
+                          className="input-field"
+                        >
+                          <option value="food">Food & Dining</option>
+                          <option value="transportation">Transportation</option>
+                          <option value="accommodation">Accommodation</option>
+                          <option value="activities">Activities</option>
+                          <option value="shopping">Shopping</option>
+                          <option value="medical">Medical</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={newExpenseData.amount}
+                          onChange={(e) => setNewExpenseData(prev => ({ ...prev, amount: e.target.value }))}
+                          className="input-field"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+                        <select
+                          value={newExpenseData.currency}
+                          onChange={(e) => setNewExpenseData(prev => ({ ...prev, currency: e.target.value }))}
+                          className="input-field"
+                        >
+                          <option value="USD">USD</option>
+                          <option value="EUR">EUR</option>
+                          <option value="GBP">GBP</option>
+                          <option value="JPY">JPY</option>
+                          <option value="INR">INR</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
+                        <input
+                          type="date"
+                          value={newExpenseData.date}
+                          onChange={(e) => setNewExpenseData(prev => ({ ...prev, date: e.target.value }))}
+                          className="input-field"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
+                        <select
+                          value={newExpenseData.payment_method}
+                          onChange={(e) => setNewExpenseData(prev => ({ ...prev, payment_method: e.target.value }))}
+                          className="input-field"
+                        >
+                          <option value="card">Card</option>
+                          <option value="cash">Cash</option>
+                          <option value="transfer">Transfer</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                        <input
+                          type="text"
+                          value={newExpenseData.location}
+                          onChange={(e) => setNewExpenseData(prev => ({ ...prev, location: e.target.value }))}
+                          className="input-field"
+                          placeholder="Where was this expense made?"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                        <textarea
+                          value={newExpenseData.description}
+                          onChange={(e) => setNewExpenseData(prev => ({ ...prev, description: e.target.value }))}
+                          rows="2"
+                          className="input-field resize-none"
+                          placeholder="Additional details..."
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                        <textarea
+                          value={newExpenseData.notes}
+                          onChange={(e) => setNewExpenseData(prev => ({ ...prev, notes: e.target.value }))}
+                          rows="2"
+                          className="input-field resize-none"
+                          placeholder="Additional notes..."
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end space-x-3 mt-4">
+                      <button
+                        onClick={() => setShowAddForms(prev => ({ ...prev, expense: false }))}
+                        className="btn-secondary"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleCreateExpense}
+                        className="btn-primary"
+                      >
+                        Add Expense
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="p-6">
-                  {expenses.length === 0 ? (
+                  {expenses.length === 0 && !showAddForms.expense ? (
                     <div className="text-center py-8">
                       <CreditCard className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                       <h3 className="text-lg font-medium text-gray-900 mb-2">No expenses yet</h3>
@@ -857,53 +1255,125 @@ const TripDetails = () => {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {expenses.map((expense, index) => (
-                        <div key={expense.id || index} className="flex justify-between items-start p-4 bg-gray-50 rounded-lg border border-gray-200">
-                          <div className="flex-1">
-                            <div className="flex justify-between items-start">
+                      {expenses.map((expense, index) => {
+                        const isEditing = editingExpense === expense.id;
+                        const editData = isEditing ? {
+                          title: expense.title || expense.description || '',
+                          description: expense.description || '',
+                          category: expense.category || 'food',
+                          amount: expense.amount || 0,
+                          currency: expense.currency || 'USD',
+                          date: expense.date ? new Date(expense.date).toISOString().split('T')[0] : '',
+                          location: expense.location || '',
+                          payment_method: expense.payment_method || 'card',
+                          notes: expense.notes || ''
+                        } : null;
+
+                        return isEditing ? (
+                          <div key={expense.id || index} className="p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
+                            <h4 className="font-medium text-gray-900 mb-3">Edit Expense</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                               <div>
-                                <h4 className="font-medium text-gray-900">
-                                  {expense.description || expense.title || expense.name || 'Expense'}
-                                </h4>
-                                <div className="flex items-center space-x-2 text-sm text-gray-600 mt-1">
-                                  <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium capitalize">
-                                    {expense.category || expense.expense_type || 'general'}
-                                  </span>
-                                  <span>•</span>
-                                  <span>{formatDate(expense.date || expense.expense_date || expense.created_at)}</span>
-                                </div>
-                                {expense.notes && (
-                                  <p className="text-sm text-gray-500 mt-2">{expense.notes}</p>
-                                )}
-                                {expense.location && (
-                                  <div className="flex items-center space-x-1 text-xs text-gray-500 mt-1">
-                                    <MapPin className="h-3 w-3" />
-                                    <span>{expense.location}</span>
-                                  </div>
-                                )}
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                                <input
+                                  type="text"
+                                  value={editData.title}
+                                  onChange={(e) => setEditingExpense(expense.id)}
+                                  className="input-field"
+                                />
                               </div>
-                              <div className="text-right">
-                                <div className="font-bold text-gray-900">
-                                  {formatCurrency(expense.amount || expense.cost || 0)}
-                                </div>
-                                <div className="text-sm text-gray-600">
-                                  {expense.currency || 'USD'}
-                                </div>
-                                {expense.payment_method && (
-                                  <div className="text-xs text-gray-500 mt-1">
-                                    {expense.payment_method}
-                                  </div>
-                                )}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  defaultValue={editData.amount}
+                                  className="input-field"
+                                  id={`expense-amount-${expense.id}`}
+                                />
                               </div>
                             </div>
+                            <div className="flex justify-end space-x-2 mt-3">
+                              <button
+                                onClick={() => setEditingExpense(null)}
+                                className="btn-secondary"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const updatedData = {
+                                    ...expense,
+                                    amount: parseFloat(document.getElementById(`expense-amount-${expense.id}`).value)
+                                  };
+                                  handleUpdateExpense(expense.id, updatedData);
+                                }}
+                                className="btn-primary"
+                              >
+                                Save
+                              </button>
+                            </div>
                           </div>
-                          <div className="ml-4">
-                            <button className="text-primary-600 hover:text-primary-700">
-                              <Edit3 className="h-4 w-4" />
-                            </button>
+                        ) : (
+                          <div key={expense.id || index} className="flex justify-between items-start p-4 bg-gray-50 rounded-lg border border-gray-200">
+                            <div className="flex-1">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <h4 className="font-medium text-gray-900">
+                                    {expense.title || expense.description || expense.name || 'Expense'}
+                                  </h4>
+                                  <div className="flex items-center space-x-2 text-sm text-gray-600 mt-1">
+                                    <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium capitalize">
+                                      {expense.category || expense.expense_type || 'general'}
+                                    </span>
+                                    <span>•</span>
+                                    <span>{formatDate(expense.date || expense.expense_date || expense.created_at)}</span>
+                                  </div>
+                                  {expense.description && expense.title && (
+                                    <p className="text-sm text-gray-600 mt-1">{expense.description}</p>
+                                  )}
+                                  {expense.notes && (
+                                    <p className="text-sm text-gray-500 mt-2">{expense.notes}</p>
+                                  )}
+                                  {expense.location && (
+                                    <div className="flex items-center space-x-1 text-xs text-gray-500 mt-1">
+                                      <MapPin className="h-3 w-3" />
+                                      <span>{expense.location}</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="text-right">
+                                  <div className="font-bold text-gray-900">
+                                    {formatCurrency(expense.amount || expense.cost || 0)}
+                                  </div>
+                                  <div className="text-sm text-gray-600">
+                                    {expense.currency || 'USD'}
+                                  </div>
+                                  {expense.payment_method && (
+                                    <div className="text-xs text-gray-500 mt-1 capitalize">
+                                      {expense.payment_method}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="ml-4 flex flex-col space-y-2">
+                              <button
+                                onClick={() => setEditingExpense(expense.id)}
+                                className="text-primary-600 hover:text-primary-700"
+                              >
+                                <Edit3 className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteExpense(expense.id)}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1705,88 +2175,136 @@ const TripDetails = () => {
                         </div>
                       ) : (
                         <div className="space-y-6">
-                          {itinerary.map((dayItem) => (
-                            <div key={dayItem.day_number || Math.random()} className="border border-gray-200 rounded-lg">
-                              <div className="p-4 bg-gray-50 border-b border-gray-200">
-                                <div className="flex justify-between items-center">
-                                  <div className="flex items-center space-x-3">
-                                    <div className="bg-primary-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-medium">
-                                      {dayItem.day_number || '?'}
+                          {(() => {
+                            // Group itinerary items by day_number to combine multiple daily plans
+                            const groupedByDay = itinerary.reduce((acc, dayItem) => {
+                              const dayNum = dayItem.day_number;
+                              if (!acc[dayNum]) {
+                                acc[dayNum] = {
+                                  day_number: dayNum,
+                                  date: dayItem.date,
+                                  plans: [],
+                                  all_activities: []
+                                };
+                              }
+                              acc[dayNum].plans.push({
+                                title: dayItem.title,
+                                notes: dayItem.notes,
+                                day_type: dayItem.day_type
+                              });
+                              if (dayItem.activities) {
+                                acc[dayNum].all_activities.push(...dayItem.activities);
+                              }
+                              return acc;
+                            }, {});
+
+                            return Object.values(groupedByDay).map((groupedDay) => (
+                              <div key={groupedDay.day_number} className="border border-gray-200 rounded-lg">
+                                <div className="p-4 bg-gray-50 border-b border-gray-200">
+                                  <div className="flex justify-between items-center">
+                                    <div className="flex items-center space-x-3">
+                                      <div className="bg-primary-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-medium">
+                                        {groupedDay.day_number}
+                                      </div>
+                                      <div>
+                                        <h3 className="font-semibold text-gray-900">
+                                          Day {groupedDay.day_number}
+                                          {groupedDay.plans.length > 1 && (
+                                            <span className="ml-2 text-xs font-normal text-gray-500">
+                                              ({groupedDay.plans.length} plans)
+                                            </span>
+                                          )}
+                                        </h3>
+                                        <p className="text-sm text-gray-600">{groupedDay.date}</p>
+                                      </div>
                                     </div>
-                                    <div>
-                                      <h3 className="font-semibold text-gray-900">
-                                        {dayItem.title || `Day ${dayItem.day_number || '?'}`}
-                                      </h3>
-                                      <p className="text-sm text-gray-600">{dayItem.date}</p>
+                                    <div className="text-sm text-gray-600">
+                                      {groupedDay.all_activities.length} activities
                                     </div>
                                   </div>
-                                  <div className="text-sm text-gray-600">
-                                    {dayItem.activity_count || 0} activities
-                                  </div>
-                                </div>
-                                {dayItem.notes && (
-                                  <div className="mt-2 text-sm text-gray-600">
-                                    {dayItem.notes}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="p-4">
-                                {!dayItem.activities || dayItem.activities.length === 0 ? (
-                                  <p className="text-gray-500 text-sm">No activities planned for this day</p>
-                                ) : (
-                                  <div className="space-y-3">
-                                    {dayItem.activities.map((activity, index) => (
-                                      <div key={activity.id || index} className="flex items-start space-x-3 p-3 bg-white rounded-lg border border-gray-100">
-                                        <Clock className="h-4 w-4 text-gray-400 mt-0.5" />
-                                        <div className="flex-1">
-                                          <div className="flex justify-between items-start">
-                                            <div className="flex-1">
-                                              <h4 className="font-medium text-gray-900">{activity.name || activity.title}</h4>
-                                              {activity.description && (
-                                                <p className="text-sm text-gray-600 mt-1">{activity.description}</p>
-                                              )}
-                                            </div>
-                                            <div className="flex items-center space-x-2">
-                                              <div className="text-sm text-gray-500 text-right">
-                                                {activity.start_time && (
-                                                  <div>{new Date(activity.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                                                )}
-                                                {activity.estimated_cost && (
-                                                  <div className="mt-1">{formatCurrency(activity.estimated_cost)}</div>
-                                                )}
-                                              </div>
-                                              <div className="flex items-center space-x-1 ml-2">
-                                                <button
-                                                  onClick={() => console.log('Edit activity:', activity.id)}
-                                                  className="text-primary-600 hover:text-primary-700 p-1"
-                                                  title="Edit activity"
-                                                >
-                                                  <Edit3 className="h-3 w-3" />
-                                                </button>
-                                                <button
-                                                  onClick={() => handleDeleteActivity(activity.id)}
-                                                  className="text-red-600 hover:text-red-700 p-1"
-                                                  title="Delete activity"
-                                                >
-                                                  <Trash2 className="h-3 w-3" />
-                                                </button>
-                                              </div>
-                                            </div>
-                                          </div>
-                                          {activity.location && (
-                                            <div className="flex items-center space-x-1 mt-2 text-sm text-gray-500">
-                                              <MapPin className="h-3 w-3" />
-                                              <span>{activity.location}</span>
-                                            </div>
+
+                                  {/* Display multiple plan titles for the same day */}
+                                  {groupedDay.plans.length > 0 && (
+                                    <div className="mt-3 space-y-1">
+                                      {groupedDay.plans.map((plan, idx) => (
+                                        <div key={idx} className="flex items-start space-x-2">
+                                          <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium capitalize">
+                                            {plan.day_type || 'general'}
+                                          </span>
+                                          {plan.title && (
+                                            <span className="text-sm font-medium text-gray-700">{plan.title}</span>
+                                          )}
+                                          {plan.notes && (
+                                            <span className="text-sm text-gray-600">- {plan.notes}</span>
                                           )}
                                         </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="p-4">
+                                  {!groupedDay.all_activities || groupedDay.all_activities.length === 0 ? (
+                                    <p className="text-gray-500 text-sm">No activities planned for this day</p>
+                                  ) : (
+                                    <div className="space-y-3">
+                                      {groupedDay.all_activities.map((activity, index) => (
+                                        <div key={activity.id || index} className="flex items-start space-x-3 p-3 bg-white rounded-lg border border-gray-100">
+                                          <Clock className="h-4 w-4 text-gray-400 mt-0.5" />
+                                          <div className="flex-1">
+                                            <div className="flex justify-between items-start">
+                                              <div className="flex-1">
+                                                <h4 className="font-medium text-gray-900">{activity.name || activity.title}</h4>
+                                                {activity.description && (
+                                                  <p className="text-sm text-gray-600 mt-1">{activity.description}</p>
+                                                )}
+                                                {activity.activity_type && (
+                                                  <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded capitalize">
+                                                    {activity.activity_type}
+                                                  </span>
+                                                )}
+                                              </div>
+                                              <div className="flex items-center space-x-2">
+                                                <div className="text-sm text-gray-500 text-right">
+                                                  {activity.start_time && (
+                                                    <div>{new Date(activity.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                                  )}
+                                                  {activity.estimated_cost && (
+                                                    <div className="mt-1">{formatCurrency(activity.estimated_cost)}</div>
+                                                  )}
+                                                </div>
+                                                <div className="flex items-center space-x-1 ml-2">
+                                                  <button
+                                                    onClick={() => console.log('Edit activity:', activity.id)}
+                                                    className="text-primary-600 hover:text-primary-700 p-1"
+                                                    title="Edit activity"
+                                                  >
+                                                    <Edit3 className="h-3 w-3" />
+                                                  </button>
+                                                  <button
+                                                    onClick={() => handleDeleteActivity(activity.id)}
+                                                    className="text-red-600 hover:text-red-700 p-1"
+                                                    title="Delete activity"
+                                                  >
+                                                    <Trash2 className="h-3 w-3" />
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            </div>
+                                            {activity.location && (
+                                              <div className="flex items-center space-x-1 mt-2 text-sm text-gray-500">
+                                                <MapPin className="h-3 w-3" />
+                                                <span>{activity.location}</span>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            ));
+                          })()}
                         </div>
                       )}
                     </>
@@ -1903,20 +2421,169 @@ const TripDetails = () => {
                     <span>Add Stay</span>
                   </button>
                 </div>
+
+                {/* Add Stay Form */}
+                {showAddForms.stay && (
+                  <div className="border-b border-gray-200 p-6 bg-gray-50">
+                    <h3 className="text-lg font-medium text-gray-900 mb-4">Add New Accommodation</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                        <input
+                          type="text"
+                          value={newStayData.name}
+                          onChange={(e) => setNewStayData(prev => ({ ...prev, name: e.target.value }))}
+                          className="input-field"
+                          placeholder="e.g., Grand Hotel"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Destination *</label>
+                        <select
+                          value={newStayData.trip_hop}
+                          onChange={(e) => setNewStayData(prev => ({ ...prev, trip_hop: e.target.value }))}
+                          className="input-field"
+                        >
+                          <option value="">Select destination</option>
+                          {tripHops.map(hop => (
+                            <option key={hop.id} value={hop.id}>
+                              {hop.name || `${hop.city}, ${hop.country}`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                        <input
+                          type="text"
+                          value={newStayData.address}
+                          onChange={(e) => setNewStayData(prev => ({ ...prev, address: e.target.value }))}
+                          className="input-field"
+                          placeholder="Full address"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Check-in Date</label>
+                        <input
+                          type="date"
+                          value={newStayData.check_in}
+                          onChange={(e) => setNewStayData(prev => ({ ...prev, check_in: e.target.value }))}
+                          className="input-field"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Check-out Date</label>
+                        <input
+                          type="date"
+                          value={newStayData.check_out}
+                          onChange={(e) => setNewStayData(prev => ({ ...prev, check_out: e.target.value }))}
+                          className="input-field"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Cost</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={newStayData.cost}
+                          onChange={(e) => setNewStayData(prev => ({ ...prev, cost: e.target.value }))}
+                          className="input-field"
+                          placeholder="Total cost"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                        <textarea
+                          value={newStayData.notes}
+                          onChange={(e) => setNewStayData(prev => ({ ...prev, notes: e.target.value }))}
+                          rows="3"
+                          className="input-field resize-none"
+                          placeholder="Booking confirmation, special requests, etc."
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end space-x-3 mt-4">
+                      <button
+                        onClick={() => setShowAddForms(prev => ({ ...prev, stay: false }))}
+                        className="btn-secondary"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleCreateStay}
+                        className="btn-primary"
+                      >
+                        Add Accommodation
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="p-6">
-                  {stays.length === 0 ? (
+                  {stays.length === 0 && !showAddForms.stay ? (
                     <div className="text-center py-8">
                       <Hotel className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                       <h3 className="text-lg font-medium text-gray-900 mb-2">No accommodations yet</h3>
                       <p className="text-gray-600">Add hotels, hostels, or other places to stay</p>
+                      {tripHops.length === 0 && (
+                        <p className="text-sm text-amber-600 mt-2">
+                          Note: Add destinations first before adding accommodations
+                        </p>
+                      )}
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {stays.map((stay) => {
-                        // Use the enhanced hop_info if available, otherwise find it
                         const associatedHop = stay.hop_info || tripHops.find(hop => hop.id === stay.trip_hop);
-                        
-                        return (
+                        const isEditing = editingStay === stay.id;
+
+                        return isEditing ? (
+                          <div key={stay.id} className="border-2 border-blue-200 rounded-lg p-4 bg-blue-50">
+                            <h4 className="font-medium text-gray-900 mb-3">Edit Accommodation</h4>
+                            <div className="space-y-3">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                                <input
+                                  type="text"
+                                  defaultValue={stay.name || ''}
+                                  className="input-field"
+                                  id={`stay-name-${stay.id}`}
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Cost</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  defaultValue={stay.cost || stay.total_cost || ''}
+                                  className="input-field"
+                                  id={`stay-cost-${stay.id}`}
+                                />
+                              </div>
+                            </div>
+                            <div className="flex justify-end space-x-2 mt-3">
+                              <button
+                                onClick={() => setEditingStay(null)}
+                                className="btn-secondary"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const updatedData = {
+                                    ...stay,
+                                    name: document.getElementById(`stay-name-${stay.id}`).value,
+                                    cost: parseFloat(document.getElementById(`stay-cost-${stay.id}`).value) || 0
+                                  };
+                                  handleUpdateStay(stay.id, updatedData);
+                                }}
+                                className="btn-primary"
+                              >
+                                Save
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
                           <div key={stay.id} className="border border-gray-200 rounded-lg p-4">
                             <div className="flex justify-between items-start mb-3">
                               <div>
@@ -1929,7 +2596,7 @@ const TripDetails = () => {
                                 </div>
                                 {associatedHop && (
                                   <div className="text-xs text-gray-500 mt-1">
-                                    Part of: {associatedHop.name}
+                                    Part of: {associatedHop.name || `${associatedHop.city}, ${associatedHop.country}`}
                                   </div>
                                 )}
                               </div>
@@ -1937,20 +2604,22 @@ const TripDetails = () => {
                                 {stay.stay_type || stay.type || 'hotel'}
                               </span>
                             </div>
-                            
+
                             <div className="space-y-2 text-sm">
                               {/* Date Range */}
-                              <div className="flex items-center space-x-4">
-                                <div className="flex items-center space-x-1">
-                                  <Calendar className="h-4 w-4 text-gray-400" />
-                                  <span>
-                                    {formatDate(stay.start_date || stay.check_in_date)} - {formatDate(stay.end_date || stay.check_out_date)}
-                                  </span>
+                              {(stay.check_in || stay.start_date || stay.check_out || stay.end_date) && (
+                                <div className="flex items-center space-x-4">
+                                  <div className="flex items-center space-x-1">
+                                    <Calendar className="h-4 w-4 text-gray-400" />
+                                    <span>
+                                      {formatDate(stay.check_in || stay.start_date || stay.check_in_date)} - {formatDate(stay.check_out || stay.end_date || stay.check_out_date)}
+                                    </span>
+                                  </div>
                                 </div>
-                              </div>
-                              
+                              )}
+
                               {/* Cost Information */}
-                              {(stay.cost_per_night || stay.total_cost) && (
+                              {(stay.cost || stay.cost_per_night || stay.total_cost) && (
                                 <div className="flex items-center space-x-4">
                                   {stay.cost_per_night && (
                                     <div className="flex items-center space-x-1">
@@ -1958,15 +2627,15 @@ const TripDetails = () => {
                                       <span>{formatCurrency(stay.cost_per_night)}/night</span>
                                     </div>
                                   )}
-                                  {stay.total_cost && (
+                                  {(stay.total_cost || stay.cost) && (
                                     <div className="flex items-center space-x-1">
                                       <span className="text-gray-500">Total:</span>
-                                      <span className="font-medium">{formatCurrency(stay.total_cost)}</span>
+                                      <span className="font-medium">{formatCurrency(stay.total_cost || stay.cost)}</span>
                                     </div>
                                   )}
                                 </div>
                               )}
-                              
+
                               {/* Booking Reference */}
                               {stay.booking_reference && (
                                 <div className="flex items-center space-x-1">
@@ -1975,13 +2644,22 @@ const TripDetails = () => {
                                 </div>
                               )}
                             </div>
-                            
-                            <div className="flex justify-end mt-3">
-                              <button className="text-primary-600 hover:text-primary-700">
+
+                            <div className="flex justify-end space-x-2 mt-3">
+                              <button
+                                onClick={() => setEditingStay(stay.id)}
+                                className="text-primary-600 hover:text-primary-700"
+                              >
                                 <Edit3 className="h-4 w-4" />
                               </button>
+                              <button
+                                onClick={() => handleDeleteStay(stay.id)}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
                             </div>
-                            
+
                             {(stay.stay_notes || stay.notes) && (
                               <div className="mt-3 text-sm text-gray-600 bg-gray-50 rounded p-2">
                                 {stay.stay_notes || stay.notes}
