@@ -49,7 +49,14 @@
   }
   
   .card {
-    @apply bg-white rounded-xl shadow-soft border border-gray-200 overflow-hidden;
+    @apply bg-white rounded-xl shadow-soft border border-gray-200;
+    overflow: hidden;
+  }
+
+  /* Allow overflow for cards containing search boxes */
+  .card.allow-overflow,
+  .card:has(.mapbox-search-wrapper) {
+    overflow: visible !important;
   }
   
   .card-hover {
@@ -75,4 +82,50 @@
   .status-completed {
     @apply status-badge bg-blue-100 text-blue-800;
   }
+}
+
+/* Mapbox SearchBox custom styles */
+.mapboxgl-ctrl-geocoder {
+  width: 100%;
+}
+
+/* Ensure parent containers don't clip the dropdown */
+.mapbox-search-wrapper {
+  position: relative;
+  z-index: 10;
+}
+
+/* Allow cards with search boxes to show dropdown */
+.card:has(.mapbox-search-wrapper) {
+  overflow: visible !important;
+}
+
+/* Ensure dropdown has proper stacking */
+[data-search-results],
+[class*="Popover"] {
+  z-index: 9999 !important;
+}
+
+/* Fix text alignment in Mapbox search suggestions */
+.mapbox-search-wrapper [role="option"],
+.mapbox-search-wrapper button[role="option"],
+.mapbox-search-wrapper [data-suggestion] {
+  text-align: left !important;
+}
+
+.mapbox-search-wrapper [role="option"] > *,
+.mapbox-search-wrapper button[role="option"] > *,
+.mapbox-search-wrapper [data-suggestion] > * {
+  text-align: left !important;
+}
+
+/* Ensure suggestion items align left */
+.mapbox-search-wrapper [role="listbox"] {
+  text-align: left !important;
+}
+
+/* Target any text within suggestions */
+.mapbox-search-wrapper [role="option"] span,
+.mapbox-search-wrapper [role="option"] div {
+  text-align: left !important;
 }

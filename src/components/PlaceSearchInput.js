@@ -29,7 +29,7 @@ const PlaceSearchInput = ({
 
       // Extract place information from the feature
       const placeData = {
-        description: feature.properties?.full_address || feature.properties?.name || feature.place_name || '',
+        description: feature.properties?.name || feature.properties?.full_address || feature.place_name || '',
         name: feature.properties?.name || feature.properties?.full_address || feature.place_name || '',
         formatted_address: feature.properties?.full_address || feature.place_name || '',
         place_id: feature.id || feature.properties?.mapbox_id || '',
@@ -57,9 +57,9 @@ const PlaceSearchInput = ({
   const handleMapSelection = (placeData) => {
     console.log('Map selection:', placeData);
 
-    // Update the search input with the selected address
+    // Update the search input with the selected name (not address)
     if (onChange) {
-      onChange(placeData.formatted_address || placeData.description);
+      onChange(placeData.name || placeData.description);
     }
 
     // Call the onPlaceSelect callback
@@ -72,7 +72,7 @@ const PlaceSearchInput = ({
 
   return (
     <>
-      <div className={`relative ${className}`}>
+      <div className={`relative mapbox-search-wrapper ${className}`}>
         <div className="flex gap-2">
           <div className="flex-1">
             <SearchBox
@@ -83,7 +83,8 @@ const PlaceSearchInput = ({
               placeholder={placeholder}
               options={{
                 language: 'en',
-                limit: 5
+                limit: 5,
+                types: 'place,locality,neighborhood,address,poi'
               }}
               theme={{
                 variables: {

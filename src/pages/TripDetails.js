@@ -98,6 +98,7 @@ const TripDetails = () => {
   });
   
   // Form states for activity management
+  const [editingActivity, setEditingActivity] = useState(null);
   const [newActivityData, setNewActivityData] = useState({
     name: '',
     description: '',
@@ -145,30 +146,34 @@ const TripDetails = () => {
   const fetchTripDetails = async () => {
     try {
       setLoading(true);
-      
+
       // Fetch complete trip details
       const tripResponse = await tripAPI.getTripComplete(tripId);
       const tripData = tripResponse.data;
-      
-      // Set main trip data
-      setTrip(tripData);
-      setEditedTrip(tripData || {});
-      
-      // Set related data from the complete response if available
-      if (tripData.trip_hops) {
+
+      // Backend returns: { trip_plan: {...}, hops: [...], days: [...], travellers: [...] }
+      // Set main trip data from trip_plan
+      setTrip(tripData.trip_plan || tripData);
+      setEditedTrip(tripData.trip_plan || tripData || {});
+
+      // Set related data from the complete response
+      // Backend returns 'hops' and 'days', not 'trip_hops' and 'trip_days'
+      if (tripData.hops) {
+        setTripHops(tripData.hops);
+      }
+      if (tripData.days) {
+        setTripDays(tripData.days);
+      }
+
+      // Fallback: try old field names if new ones don't exist
+      if (!tripData.hops && tripData.trip_hops) {
         setTripHops(tripData.trip_hops);
       }
-      if (tripData.trip_days) {
+      if (!tripData.days && tripData.trip_days) {
         setTripDays(tripData.trip_days);
       }
-      
-      // First fetch hops and days, then fetch dependent data
-      await Promise.all([
-        fetchTripHops(), // Ensure we have the latest hops
-        fetchTripDays(), // Ensure we have the latest days
-      ]);
-      
-      // Then fetch data that depends on hops/days
+
+      // Fetch additional data that may not be in complete response
       await Promise.all([
         fetchItinerary(), // Will build from days if backend endpoint not available
         fetchDocuments(),
@@ -597,17 +602,38 @@ const TripDetails = () => {
     }
   };
 
-  // eslint-disable-next-line no-unused-vars
   const handleUpdateActivity = async (activityId, updatedData) => {
     try {
-      const activityData = {
-        ...updatedData,
-        estimated_cost: updatedData.estimated_cost ? parseFloat(updatedData.estimated_cost) : null,
-        start_time: updatedData.start_time ? new Date(`1970-01-01T${updatedData.start_time}:00`).toISOString() : null,
-        end_time: updatedData.end_time ? new Date(`1970-01-01T${updatedData.end_time}:00`).toISOString() : null,
-      };
-      
-      await activityAPI.updateActivity(activityId, activityData);
+      // Format time strings if they exist
+      let formattedData = { ...updatedData };
+
+      // Handle start_time
+      if (updatedData.start_time) {
+        if (typeof updatedData.start_time === 'string' && !updatedData.start_time.includes('T')) {
+          // Time string like "14:30"
+          formattedData.start_time = new Date(`1970-01-01T${updatedData.start_time}:00`).toISOString();
+        } else if (updatedData.start_time instanceof Date) {
+          formattedData.start_time = updatedData.start_time.toISOString();
+        }
+      }
+
+      // Handle end_time
+      if (updatedData.end_time) {
+        if (typeof updatedData.end_time === 'string' && !updatedData.end_time.includes('T')) {
+          // Time string like "16:30"
+          formattedData.end_time = new Date(`1970-01-01T${updatedData.end_time}:00`).toISOString();
+        } else if (updatedData.end_time instanceof Date) {
+          formattedData.end_time = updatedData.end_time.toISOString();
+        }
+      }
+
+      // Handle estimated_cost
+      if (formattedData.estimated_cost) {
+        formattedData.estimated_cost = parseFloat(formattedData.estimated_cost);
+      }
+
+      await activityAPI.updateActivity(activityId, formattedData);
+      setEditingActivity(null);
       await fetchItinerary();
     } catch (error) {
       setError('Failed to update activity');
@@ -769,18 +795,66 @@ const TripDetails = () => {
   };
 
   const formatCurrency = (amount) => {
+    // Handle null, undefined, NaN, and invalid values
+    if (amount === null || amount === undefined || isNaN(amount)) {
+      return '$0.00';
+    }
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD'
     }).format(amount);
   };
 
+  // Helper function to parse place data for destinations
+  const parsePlaceForDestination = (place) => {
+    const name = place.name || '';
+    const formattedAddress = place.formatted_address || place.description || '';
+    const properties = place.properties || {};
+
+    // Use the place name as the primary identifier
+    let city = name;
+    let country = '';
+
+    // Try to extract country from context first (most reliable)
+    if (properties.context?.country) {
+      country = properties.context.country.name || '';
+    }
+
+    // If no name but we have a place in context, use that
+    if (!city && properties.context?.place) {
+      city = properties.context.place.name || '';
+    }
+
+    // Fallback: parse from formatted address if we still don't have country
+    if (!country) {
+      const parts = formattedAddress.split(',').map(p => p.trim());
+      if (parts.length >= 2) {
+        // Last part is usually the country
+        country = parts[parts.length - 1];
+      }
+    }
+
+    // If still no city, fallback to parsing formatted address
+    if (!city) {
+      const parts = formattedAddress.split(',').map(p => p.trim());
+      city = parts[0] || '';
+    }
+
+    return {
+      displayName: name,
+      city,
+      country,
+      place_id: place.id || place.place_id
+    };
+  };
+
   const sections = [
     { id: 'overview', label: 'Overview', icon: MapPin, description: 'Trip summary & details' },
     { id: 'map', label: 'Map View', icon: Map, description: 'Visualize your trip' },
+    { id: 'destinations', label: 'Destinations', icon: Navigation, description: 'Trip hops/locations' },
+    { id: 'days', label: 'Daily Plans', icon: Calendar, description: 'Day by day planning' },
     { id: 'activities', label: 'Activities', icon: Plus, description: 'Manage trip activities' },
     { id: 'itinerary', label: 'Itinerary', icon: Clock, description: 'Auto-generated schedule' },
-    { id: 'destinations', label: 'Destinations', icon: Navigation, description: 'Places you\'ll visit' },
     { id: 'stays', label: 'Accommodations', icon: Hotel, description: 'Where you\'ll stay' },
     { id: 'expenses', label: 'Expenses', icon: CreditCard, description: 'Track your spending' },
     { id: 'documents', label: 'Documents', icon: FileText, description: 'Important files' },
@@ -997,17 +1071,17 @@ const TripDetails = () => {
                   {!isEditingOverview ? (
                     <>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                        <div>
+                        <div className="flex flex-col">
                           <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                             Duration
                           </h3>
-                          <div className="flex items-center space-x-2 text-lg text-gray-900">
-                            <Calendar className="h-5 w-5 text-gray-400" />
-                            <span>{formatDate(tripData.start_date)} - {formatDate(tripData.end_date)}</span>
+                          <div className="flex items-start space-x-2 text-gray-900">
+                            <Calendar className="h-5 w-5 text-gray-400 flex-shrink-0 mt-0.5" />
+                            <span className="text-base">{formatDate(tripData.start_date)} - {formatDate(tripData.end_date)}</span>
                           </div>
                         </div>
 
-                        <div>
+                        <div className="flex flex-col">
                           <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                             Travel Mode{(() => {
                               const modes = typeof tripData.travel_mode === 'string'
@@ -1016,7 +1090,7 @@ const TripDetails = () => {
                               return modes.length > 1 ? 's' : '';
                             })()}
                           </h3>
-                          <div className="flex items-center flex-wrap gap-2 text-lg text-gray-900">
+                          <div className="flex items-start flex-wrap gap-2 text-gray-900">
                             {(() => {
                               // Handle both string (comma-separated) and array formats
                               const modes = typeof tripData.travel_mode === 'string'
@@ -1031,18 +1105,18 @@ const TripDetails = () => {
                                   </div>
                                 ));
                               }
-                              return <span>Not specified</span>;
+                              return <span className="text-base">Not specified</span>;
                             })()}
                           </div>
                         </div>
 
-                        <div>
+                        <div className="flex flex-col">
                           <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                             Budget
                           </h3>
-                          <div className="flex items-center space-x-2 text-lg text-gray-900">
-                            <DollarSign className="h-5 w-5 text-gray-400" />
-                            <span>{expensesSummary ? formatCurrency(expensesSummary.total) : 'Not set'}</span>
+                          <div className="flex items-start space-x-2 text-gray-900">
+                            <DollarSign className="h-5 w-5 text-gray-400 flex-shrink-0 mt-0.5" />
+                            <span className="text-base">{expensesSummary ? formatCurrency(expensesSummary.total) : 'Not set'}</span>
                           </div>
                         </div>
                       </div>
@@ -1260,7 +1334,8 @@ const TripDetails = () => {
                         <MapPickerModal
                           isOpen={true}
                           onClose={() => {}}
-                          onLocationSelect={(location) => console.log('Selected:', location)}
+                          viewOnly={true}
+                          locations={tripHops}
                           initialCenter={
                             tripHops.length > 0 && tripHops[0].latitude && tripHops[0].longitude
                               ? { lng: tripHops[0].longitude, lat: tripHops[0].latitude }
@@ -1346,30 +1421,34 @@ const TripDetails = () => {
                 
                 {expensesSummary && (
                   <div className="p-6 bg-gray-50 border-b border-gray-200">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className={`grid grid-cols-1 ${expensesSummary.budget ? 'md:grid-cols-4' : 'md:grid-cols-2'} gap-4`}>
                       <div className="text-center">
                         <div className="text-2xl font-bold text-gray-900">
                           {formatCurrency(expensesSummary.total)}
                         </div>
                         <div className="text-sm text-gray-600">Total Spent</div>
                       </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-emerald-600">
-                          {formatCurrency(expensesSummary.budget || 0)}
-                        </div>
-                        <div className="text-sm text-gray-600">Budget</div>
-                      </div>
+                      {expensesSummary.budget && (
+                        <>
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-emerald-600">
+                              {formatCurrency(expensesSummary.budget)}
+                            </div>
+                            <div className="text-sm text-gray-600">Budget</div>
+                          </div>
+                          <div className="text-center">
+                            <div className={`text-2xl font-bold ${expensesSummary.remaining >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              {formatCurrency(expensesSummary.remaining || expensesSummary.budget - expensesSummary.total)}
+                            </div>
+                            <div className="text-sm text-gray-600">Remaining</div>
+                          </div>
+                        </>
+                      )}
                       <div className="text-center">
                         <div className="text-2xl font-bold text-gray-900">
                           {expenses.length}
                         </div>
                         <div className="text-sm text-gray-600">Transactions</div>
-                      </div>
-                      <div className="text-center">
-                        <div className={`text-2xl font-bold ${expensesSummary.remaining >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {formatCurrency(expensesSummary.remaining || (expensesSummary.budget || 0) - expensesSummary.total)}
-                        </div>
-                        <div className="text-sm text-gray-600">Remaining</div>
                       </div>
                     </div>
                   </div>
@@ -1666,43 +1745,22 @@ const TripDetails = () => {
                       <div className="md:col-span-2">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Location (City, Country) *</label>
                         <PlaceSearchInput
-                          value={newHopData.city ? `${newHopData.city}, ${newHopData.country}` : ''}
+                          value={newHopData.city || ''}
                           onChange={(value) => {
-                            // Clear selection when typing
-                            const parts = value.split(',');
-                            if (parts.length >= 2) {
-                              setNewHopData(prev => ({
-                                ...prev,
-                                city: parts[0].trim(),
-                                country: parts.slice(-1)[0].trim()
-                              }));
-                            } else {
-                              setNewHopData(prev => ({
-                                ...prev,
-                                city: value,
-                                country: ''
-                              }));
-                            }
+                            // Update city when typing
+                            setNewHopData(prev => ({
+                              ...prev,
+                              city: value
+                            }));
                           }}
                           onPlaceSelect={(place) => {
-                            const fullAddress = place.formatted_address || place.description || '';
-                            const parts = fullAddress.split(',');
-
-                            if (parts.length >= 2) {
-                              setNewHopData(prev => ({
-                                ...prev,
-                                city: parts[0].trim(),
-                                country: parts.slice(-1)[0].trim(),
-                                place_id: place.id || place.place_id
-                              }));
-                            } else {
-                              setNewHopData(prev => ({
-                                ...prev,
-                                city: fullAddress,
-                                country: '',
-                                place_id: place.id || place.place_id
-                              }));
-                            }
+                            const parsed = parsePlaceForDestination(place);
+                            setNewHopData(prev => ({
+                              ...prev,
+                              city: parsed.city,
+                              country: parsed.country,
+                              place_id: parsed.place_id
+                            }));
                           }}
                           placeholder="e.g., Paris, France"
                         />
@@ -1788,40 +1846,22 @@ const TripDetails = () => {
                               </div>
                               <div>
                                 <PlaceSearchInput
-                                  value={editingHop.city && editingHop.country ? `${editingHop.city}, ${editingHop.country}` : editingHop.city || ''}
+                                  value={editingHop.city || ''}
                                   onChange={(value) => {
-                                    const parts = value.split(',');
-                                    if (parts.length >= 2) {
-                                      setEditingHop(prev => ({
-                                        ...prev,
-                                        city: parts[0].trim(),
-                                        country: parts.slice(-1)[0].trim()
-                                      }));
-                                    } else {
-                                      setEditingHop(prev => ({
-                                        ...prev,
-                                        city: value
-                                      }));
-                                    }
+                                    // Update city when typing
+                                    setEditingHop(prev => ({
+                                      ...prev,
+                                      city: value
+                                    }));
                                   }}
                                   onPlaceSelect={(place) => {
-                                    const fullAddress = place.formatted_address || place.description || '';
-                                    const parts = fullAddress.split(',');
-
-                                    if (parts.length >= 2) {
-                                      setEditingHop(prev => ({
-                                        ...prev,
-                                        city: parts[0].trim(),
-                                        country: parts.slice(-1)[0].trim(),
-                                        place_id: place.id || place.place_id
-                                      }));
-                                    } else {
-                                      setEditingHop(prev => ({
-                                        ...prev,
-                                        city: fullAddress,
-                                        place_id: place.id || place.place_id
-                                      }));
-                                    }
+                                    const parsed = parsePlaceForDestination(place);
+                                    setEditingHop(prev => ({
+                                      ...prev,
+                                      city: parsed.city,
+                                      country: parsed.country,
+                                      place_id: parsed.place_id
+                                    }));
                                   }}
                                   placeholder="City, Country"
                                 />
@@ -2412,49 +2452,149 @@ const TripDetails = () => {
                                       {index > 0 && (
                                         <div className="absolute -top-3 left-5 w-0.5 h-3 border-l-2 border-dashed border-gray-300"></div>
                                       )}
-                                      <div className="flex items-start space-x-3 p-3 bg-white rounded-lg border border-gray-100">
-                                        <Clock className="h-4 w-4 text-gray-400 mt-0.5" />
-                                        <div className="flex-1">
-                                          <div className="flex justify-between items-start">
-                                            <div className="flex-1">
-                                              <h4 className="font-medium text-gray-900">{activity.name || activity.title}</h4>
-                                              {activity.description && (
-                                                <p className="text-sm text-gray-600 mt-1">{activity.description}</p>
-                                              )}
-                                              {activity.activity_type && (
-                                                <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded capitalize">
-                                                  {activity.activity_type}
-                                                </span>
-                                              )}
+                                      {editingActivity?.id === activity.id ? (
+                                        // Edit Form for Activity
+                                        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                                            <div className="md:col-span-2">
+                                              <input
+                                                type="text"
+                                                value={editingActivity.name || ''}
+                                                onChange={(e) => setEditingActivity(prev => ({ ...prev, name: e.target.value }))}
+                                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
+                                                placeholder="Activity name"
+                                              />
                                             </div>
-                                            <div className="flex items-center space-x-2">
-                                              <div className="text-sm text-gray-500 text-right">
-                                                {activity.start_time && (
-                                                  <div>{new Date(activity.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                                                )}
-                                                {activity.estimated_cost && (
-                                                  <div className="mt-1">{formatCurrency(activity.estimated_cost)}</div>
-                                                )}
-                                              </div>
-                                              <div className="flex items-center space-x-1 ml-2">
-                                                <button
-                                                  onClick={() => handleDeleteActivity(activity.id)}
-                                                  className="text-red-600 hover:text-red-700 p-1"
-                                                  title="Delete activity"
-                                                >
-                                                  <Trash2 className="h-3 w-3" />
-                                                </button>
-                                              </div>
+                                            <div>
+                                              <select
+                                                value={editingActivity.activity_type || 'sightseeing'}
+                                                onChange={(e) => setEditingActivity(prev => ({ ...prev, activity_type: e.target.value }))}
+                                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
+                                              >
+                                                <option value="sightseeing">Sightseeing</option>
+                                                <option value="dining">Dining</option>
+                                                <option value="shopping">Shopping</option>
+                                                <option value="entertainment">Entertainment</option>
+                                                <option value="transport">Transport</option>
+                                                <option value="adventure">Adventure</option>
+                                                <option value="cultural">Cultural</option>
+                                                <option value="business">Business</option>
+                                                <option value="other">Other</option>
+                                              </select>
+                                            </div>
+                                            <div>
+                                              <input
+                                                type="text"
+                                                value={editingActivity.location || ''}
+                                                onChange={(e) => setEditingActivity(prev => ({ ...prev, location: e.target.value }))}
+                                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
+                                                placeholder="Location"
+                                              />
+                                            </div>
+                                            <div>
+                                              <input
+                                                type="time"
+                                                value={editingActivity.start_time ? (editingActivity.start_time.includes('T') ? new Date(editingActivity.start_time).toTimeString().slice(0,5) : editingActivity.start_time) : ''}
+                                                onChange={(e) => setEditingActivity(prev => ({ ...prev, start_time: e.target.value }))}
+                                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
+                                              />
+                                            </div>
+                                            <div>
+                                              <input
+                                                type="time"
+                                                value={editingActivity.end_time ? (editingActivity.end_time.includes('T') ? new Date(editingActivity.end_time).toTimeString().slice(0,5) : editingActivity.end_time) : ''}
+                                                onChange={(e) => setEditingActivity(prev => ({ ...prev, end_time: e.target.value }))}
+                                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
+                                              />
+                                            </div>
+                                            <div>
+                                              <input
+                                                type="number"
+                                                value={editingActivity.estimated_cost || ''}
+                                                onChange={(e) => setEditingActivity(prev => ({ ...prev, estimated_cost: e.target.value }))}
+                                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
+                                                placeholder="Cost"
+                                                step="0.01"
+                                              />
+                                            </div>
+                                            <div className="md:col-span-2">
+                                              <textarea
+                                                value={editingActivity.description || ''}
+                                                onChange={(e) => setEditingActivity(prev => ({ ...prev, description: e.target.value }))}
+                                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
+                                                rows="2"
+                                                placeholder="Description"
+                                              />
                                             </div>
                                           </div>
-                                          {activity.location && (
-                                            <div className="flex items-center space-x-1 mt-2 text-sm text-gray-500">
-                                              <MapPin className="h-3 w-3" />
-                                              <span>{activity.location}</span>
-                                            </div>
-                                          )}
+                                          <div className="flex justify-end space-x-2">
+                                            <button
+                                              onClick={() => setEditingActivity(null)}
+                                              className="px-2 py-1 text-xs text-gray-600 hover:text-gray-800"
+                                            >
+                                              Cancel
+                                            </button>
+                                            <button
+                                              onClick={() => handleUpdateActivity(activity.id, editingActivity)}
+                                              className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700"
+                                            >
+                                              Save
+                                            </button>
+                                          </div>
                                         </div>
-                                      </div>
+                                      ) : (
+                                        // Display View for Activity
+                                        <div className="flex items-start space-x-3 p-3 bg-white rounded-lg border border-gray-100">
+                                          <Clock className="h-4 w-4 text-gray-400 mt-0.5" />
+                                          <div className="flex-1">
+                                            <div className="flex justify-between items-start">
+                                              <div className="flex-1">
+                                                <h4 className="font-medium text-gray-900">{activity.name || activity.title}</h4>
+                                                {activity.description && (
+                                                  <p className="text-sm text-gray-600 mt-1">{activity.description}</p>
+                                                )}
+                                                {activity.activity_type && (
+                                                  <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded capitalize">
+                                                    {activity.activity_type}
+                                                  </span>
+                                                )}
+                                              </div>
+                                              <div className="flex items-center space-x-2">
+                                                <div className="text-sm text-gray-500 text-right">
+                                                  {activity.start_time && (
+                                                    <div>{new Date(activity.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                                  )}
+                                                  {activity.estimated_cost && (
+                                                    <div className="mt-1">{formatCurrency(activity.estimated_cost)}</div>
+                                                  )}
+                                                </div>
+                                                <div className="flex items-center space-x-1 ml-2">
+                                                  <button
+                                                    onClick={() => setEditingActivity({ ...activity })}
+                                                    className="text-primary-600 hover:text-primary-700 p-1"
+                                                    title="Edit activity"
+                                                  >
+                                                    <Edit3 className="h-3 w-3" />
+                                                  </button>
+                                                  <button
+                                                    onClick={() => handleDeleteActivity(activity.id)}
+                                                    className="text-red-600 hover:text-red-700 p-1"
+                                                    title="Delete activity"
+                                                  >
+                                                    <Trash2 className="h-3 w-3" />
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            </div>
+                                            {activity.location && (
+                                              <div className="flex items-center space-x-1 mt-2 text-sm text-gray-500">
+                                                <MapPin className="h-3 w-3" />
+                                                <span>{activity.location}</span>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      )}
                                     </div>
                                   ))}
                                 </div>
@@ -2630,7 +2770,7 @@ const TripDetails = () => {
                             setNewActivityData(prev => ({ ...prev, location: value }));
                           }}
                           onPlaceSelect={(place) => {
-                            const location = place.formatted_address || place.name || place.description || '';
+                            const location = place.name || place.description || '';
                             setNewActivityData(prev => ({ ...prev, location: location }));
                           }}
                           placeholder="Search for a location..."

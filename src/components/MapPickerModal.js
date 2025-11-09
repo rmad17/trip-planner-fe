@@ -16,19 +16,24 @@ mapboxgl.accessToken = MAPBOX_TOKEN;
  * @param {function} onLocationSelect - Callback when location is selected
  * @param {object} initialCenter - Initial map center { lng, lat }
  * @param {string} provider - Map provider ('mapbox' or 'google')
+ * @param {boolean} viewOnly - If true, shows map without modal wrapper and selection features
+ * @param {array} locations - Array of locations to display as pins in viewOnly mode
  */
 const MapPickerModal = ({
   isOpen,
   onClose,
   onLocationSelect,
   initialCenter = { lng: 0, lat: 20 },
-  provider = 'mapbox'
+  provider = 'mapbox',
+  viewOnly = false,
+  locations = []
 }) => {
   const mapContainer = useRef(null);
   const minimapContainer = useRef(null);
   const map = useRef(null);
   const minimap = useRef(null);
   const marker = useRef(null);
+  const markers = useRef([]); // For viewOnly mode with multiple locations
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [error, setError] = useState(null);
@@ -188,28 +193,74 @@ const MapPickerModal = ({
         map.current.on('zoom', updateViewportBox);
       }
 
-      // Handle map clicks
-      map.current.on('click', async (e) => {
-        const { lng, lat } = e.lngLat;
+      // In viewOnly mode, add markers for all locations
+      if (viewOnly && locations.length > 0) {
+        // Clear existing markers
+        markers.current.forEach(m => m.remove());
+        markers.current = [];
 
-        // Add or update marker
-        if (marker.current) {
-          marker.current.setLngLat([lng, lat]);
-        } else {
-          marker.current = new mapboxgl.Marker({ color: '#4f46e5', draggable: true })
-            .setLngLat([lng, lat])
-            .addTo(map.current);
+        // Add markers for each location
+        locations.forEach((location, index) => {
+          if (location.latitude && location.longitude) {
+            const marker = new mapboxgl.Marker({ color: '#4f46e5' })
+              .setLngLat([location.longitude, location.latitude])
+              .addTo(map.current);
 
-          // Handle marker drag
-          marker.current.on('dragend', async () => {
-            const lngLat = marker.current.getLngLat();
-            await handleLocationSelect(lngLat.lng, lngLat.lat);
+            // Add popup with location info
+            if (location.name || location.city) {
+              const popup = new mapboxgl.Popup({ offset: 25 })
+                .setHTML(`
+                  <div style="padding: 4px;">
+                    <strong>${location.name || location.city || 'Location'}</strong>
+                    ${location.city && location.name ? `<br/>${location.city}` : ''}
+                    ${location.country ? `<br/>${location.country}` : ''}
+                  </div>
+                `);
+              marker.setPopup(popup);
+            }
+
+            markers.current.push(marker);
+          }
+        });
+
+        // Fit map bounds to show all markers
+        if (locations.length > 0) {
+          const bounds = new mapboxgl.LngLatBounds();
+          locations.forEach(location => {
+            if (location.latitude && location.longitude) {
+              bounds.extend([location.longitude, location.latitude]);
+            }
           });
-        }
 
-        // Reverse geocode the location
-        await handleLocationSelect(lng, lat);
-      });
+          // Only fit bounds if we have valid locations
+          if (!bounds.isEmpty()) {
+            map.current.fitBounds(bounds, { padding: 50, maxZoom: 10 });
+          }
+        }
+      } else if (!viewOnly) {
+        // Handle map clicks for location selection (only when not in viewOnly mode)
+        map.current.on('click', async (e) => {
+          const { lng, lat } = e.lngLat;
+
+          // Add or update marker
+          if (marker.current) {
+            marker.current.setLngLat([lng, lat]);
+          } else {
+            marker.current = new mapboxgl.Marker({ color: '#4f46e5', draggable: true })
+              .setLngLat([lng, lat])
+              .addTo(map.current);
+
+            // Handle marker drag
+            marker.current.on('dragend', async () => {
+              const lngLat = marker.current.getLngLat();
+              await handleLocationSelect(lngLat.lng, lngLat.lat);
+            });
+          }
+
+          // Reverse geocode the location
+          await handleLocationSelect(lng, lat);
+        });
+      }
     } catch (err) {
       console.error('Error initializing map:', err);
       setMapError('Failed to initialize map. Please try again.');
@@ -218,6 +269,10 @@ const MapPickerModal = ({
 
     // Cleanup when modal closes
     return () => {
+      // Clean up all markers
+      markers.current.forEach(m => m.remove());
+      markers.current = [];
+
       if (minimap.current) {
         minimap.current.remove();
         minimap.current = null;
@@ -228,7 +283,7 @@ const MapPickerModal = ({
         marker.current = null;
       }
     };
-  }, [isOpen, handleLocationSelect, initialCenter.lng, initialCenter.lat]);
+  }, [isOpen, handleLocationSelect, initialCenter.lng, initialCenter.lat, viewOnly, locations]);
 
   // Confirm selection
   const handleConfirm = () => {
@@ -251,6 +306,46 @@ const MapPickerModal = ({
 
   if (!isOpen) return null;
 
+  // ViewOnly mode - render just the map without modal wrapper
+  if (viewOnly) {
+    return (
+      <div className="relative w-full h-full">
+        <div ref={mapContainer} className="absolute inset-0" />
+
+        {/* Minimap */}
+        <div
+          ref={minimapContainer}
+          className="absolute bottom-4 right-4 w-48 h-32 rounded-lg shadow-lg border-2 border-white overflow-hidden z-10"
+          style={{ pointerEvents: 'none' }}
+        />
+
+        {/* Map Loading Indicator */}
+        {mapLoading && !mapError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-100 z-10">
+            <div className="text-center">
+              <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto mb-3" />
+              <p className="text-sm text-gray-700">Loading map...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Map Error */}
+        {mapError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-100 z-10">
+            <div className="text-center max-w-md px-6">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <MapPin className="w-8 h-8 text-red-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Map Load Error</h3>
+              <p className="text-sm text-gray-600">{mapError}</p>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Modal mode - original behavior for location selection
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
