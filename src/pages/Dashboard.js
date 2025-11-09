@@ -19,7 +19,8 @@ import {
   Search,
   Bell,
   Filter,
-  Sparkles
+  Sparkles,
+  X
 } from 'lucide-react';
 
 const Dashboard = () => {
@@ -33,10 +34,11 @@ const Dashboard = () => {
     start_date: '',
     end_date: '',
     min_days: '',
-    travel_mode: 'flight',
+    travel_mode: [],
     notes: '',
     hotels: '',
-    tags: ''
+    tags: '',
+    tagInput: ''
   });
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -227,19 +229,51 @@ const Dashboard = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Primary Travel Mode
+                      Travel Modes (select all that apply)
                     </label>
-                    <select
-                      name="travel_mode"
-                      value={newTrip.travel_mode}
-                      onChange={handleInputChange}
-                      className="input-field"
-                    >
-                      <option value="flight">✈️ Flight</option>
-                      <option value="car">🚗 Car</option>
-                      <option value="train">🚆 Train</option>
-                      <option value="bus">🚌 Bus</option>
-                    </select>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { value: 'flight', label: 'Flight', icon: '✈️' },
+                        { value: 'car', label: 'Car', icon: '🚗' },
+                        { value: 'train', label: 'Train', icon: '🚆' },
+                        { value: 'bus', label: 'Bus', icon: '🚌' }
+                      ].map(mode => {
+                        const travelModes = Array.isArray(newTrip.travel_mode)
+                          ? newTrip.travel_mode
+                          : (newTrip.travel_mode ? [newTrip.travel_mode] : []);
+                        const isSelected = travelModes.includes(mode.value);
+
+                        return (
+                          <label
+                            key={mode.value}
+                            className={`flex items-center space-x-2 px-3 py-2 border-2 rounded-lg cursor-pointer transition-all ${
+                              isSelected
+                                ? 'border-primary-600 bg-primary-50'
+                                : 'border-gray-300 hover:border-gray-400'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                const currentModes = Array.isArray(newTrip.travel_mode)
+                                  ? newTrip.travel_mode
+                                  : (newTrip.travel_mode ? [newTrip.travel_mode] : []);
+
+                                const newModes = e.target.checked
+                                  ? [...currentModes, mode.value]
+                                  : currentModes.filter(m => m !== mode.value);
+
+                                setNewTrip(prev => ({ ...prev, travel_mode: newModes }));
+                              }}
+                              className="h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+                            />
+                            <span className="text-lg">{mode.icon}</span>
+                            <span className="text-sm font-medium">{mode.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -261,9 +295,13 @@ const Dashboard = () => {
                       type="date"
                       name="end_date"
                       value={newTrip.end_date}
+                      min={newTrip.start_date || ''}
                       onChange={handleInputChange}
                       className="input-field"
                     />
+                    {newTrip.start_date && newTrip.end_date && newTrip.end_date < newTrip.start_date && (
+                      <p className="text-red-600 text-xs mt-1">End date must be after start date</p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -295,14 +333,63 @@ const Dashboard = () => {
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Trip Tags
                     </label>
-                    <input
-                      type="text"
-                      name="tags"
-                      value={newTrip.tags}
-                      onChange={handleInputChange}
-                      placeholder="romantic, adventure, cultural, family"
-                      className="input-field"
-                    />
+                    <div className="space-y-2">
+                      {/* Tag input */}
+                      <input
+                        type="text"
+                        value={newTrip.tagInput || ''}
+                        onChange={(e) => setNewTrip(prev => ({ ...prev, tagInput: e.target.value }))}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && newTrip.tagInput?.trim()) {
+                            e.preventDefault();
+                            const currentTags = typeof newTrip.tags === 'string'
+                              ? newTrip.tags.split(',').map(t => t.trim()).filter(t => t)
+                              : (Array.isArray(newTrip.tags) ? newTrip.tags : []);
+
+                            const newTag = newTrip.tagInput.trim();
+                            if (!currentTags.includes(newTag)) {
+                              setNewTrip(prev => ({
+                                ...prev,
+                                tags: [...currentTags, newTag].join(', '),
+                                tagInput: ''
+                              }));
+                            } else {
+                              setNewTrip(prev => ({ ...prev, tagInput: '' }));
+                            }
+                          }
+                        }}
+                        placeholder="Type a tag and press Enter (e.g., romantic, adventure, cultural)"
+                        className="input-field"
+                      />
+                      {/* Tag chips */}
+                      {(() => {
+                        const tags = typeof newTrip.tags === 'string'
+                          ? newTrip.tags.split(',').map(t => t.trim()).filter(t => t)
+                          : (Array.isArray(newTrip.tags) ? newTrip.tags : []);
+
+                        return tags.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {tags.map((tag, index) => (
+                              <span
+                                key={index}
+                                className="inline-flex items-center px-3 py-1 bg-accent-100 text-accent-700 text-sm rounded-full font-medium"
+                              >
+                                #{tag}
+                                <button
+                                  onClick={() => {
+                                    const newTags = tags.filter((_, i) => i !== index);
+                                    setNewTrip(prev => ({ ...prev, tags: newTags.join(', ') }));
+                                  }}
+                                  className="ml-2 text-accent-500 hover:text-accent-700"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </div>
                   <div className="lg:col-span-2">
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
