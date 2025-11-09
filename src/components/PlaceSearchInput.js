@@ -1,15 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { SearchBox } from '@mapbox/search-js-react';
+import { Map } from 'lucide-react';
+import MapPickerModal from './MapPickerModal';
+import { getMapProvider } from '../services/geocodingService';
 
-const MAPBOX_ACCESS_TOKEN = 'pk.eyJ1Ijoicm1hZDE3IiwiYSI6ImNtMnRmZDl1NDAyYjkya3NmZ2oybGUyOTgifQ.MJp5NBYhCR_G2qzoVTzQMg';
+const MAPBOX_ACCESS_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN;
 
 const PlaceSearchInput = ({
   value = '',
   onChange,
   placeholder = "Search for places...",
   className = "",
-  onPlaceSelect
+  onPlaceSelect,
+  showMapPicker = true,
+  provider = null // Can be overridden for specific trips
 }) => {
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+  const mapProvider = provider || getMapProvider();
+
   const handleRetrieve = (result) => {
     console.log('Mapbox SearchBox onRetrieve:', result);
 
@@ -46,35 +54,78 @@ const PlaceSearchInput = ({
     }
   };
 
+  const handleMapSelection = (placeData) => {
+    console.log('Map selection:', placeData);
+
+    // Update the search input with the selected address
+    if (onChange) {
+      onChange(placeData.formatted_address || placeData.description);
+    }
+
+    // Call the onPlaceSelect callback
+    if (onPlaceSelect) {
+      onPlaceSelect(placeData);
+    }
+
+    setIsMapModalOpen(false);
+  };
+
   return (
-    <div className={`relative ${className}`}>
-      <SearchBox
-        accessToken={MAPBOX_ACCESS_TOKEN}
-        value={value}
-        onChange={handleChange}
-        onRetrieve={handleRetrieve}
-        placeholder={placeholder}
-        options={{
-          language: 'en',
-          limit: 5
-        }}
-        theme={{
-          variables: {
-            fontFamily: 'inherit',
-            unit: '16px',
-            padding: '0.75rem',
-            borderRadius: '0.5rem',
-            border: '1px solid #d1d5db',
-            boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-            colorText: '#111827',
-            colorPrimary: '#4f46e5',
-            colorSecondary: '#6b7280',
-            colorBackground: '#ffffff',
-            colorBackgroundHover: '#f9fafb'
-          }
-        }}
-      />
-    </div>
+    <>
+      <div className={`relative ${className}`}>
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <SearchBox
+              accessToken={MAPBOX_ACCESS_TOKEN}
+              value={value}
+              onChange={handleChange}
+              onRetrieve={handleRetrieve}
+              placeholder={placeholder}
+              options={{
+                language: 'en',
+                limit: 5
+              }}
+              theme={{
+                variables: {
+                  fontFamily: 'inherit',
+                  unit: '16px',
+                  padding: '0.75rem',
+                  borderRadius: '0.5rem',
+                  border: '1px solid #d1d5db',
+                  boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                  colorText: '#111827',
+                  colorPrimary: '#4f46e5',
+                  colorSecondary: '#6b7280',
+                  colorBackground: '#ffffff',
+                  colorBackgroundHover: '#f9fafb'
+                }
+              }}
+            />
+          </div>
+
+          {showMapPicker && (
+            <button
+              type="button"
+              onClick={() => setIsMapModalOpen(true)}
+              className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-gray-700"
+              title="Select location on map"
+            >
+              <Map className="w-4 h-4" />
+              <span className="hidden sm:inline text-sm font-medium">Map</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {showMapPicker && (
+        <MapPickerModal
+          isOpen={isMapModalOpen}
+          onClose={() => setIsMapModalOpen(false)}
+          onLocationSelect={handleMapSelection}
+          provider={mapProvider}
+        />
+      )}
+    </>
   );
 };
 

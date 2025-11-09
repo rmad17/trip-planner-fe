@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { tripAPI } from '../services/api';
-import { SearchBox } from '@mapbox/search-js-react';
+import PlaceSearchInput from '../components/PlaceSearchInput';
 import AITripModal from '../components/AITripModal';
+import ProfileButton from '../components/ProfileButton';
 import {
   Plus,
   MapPin,
@@ -17,8 +18,6 @@ import {
   ChevronRight,
   Search,
   Bell,
-  Settings,
-  LogOut,
   Filter,
   Sparkles
 } from 'lucide-react';
@@ -39,7 +38,7 @@ const Dashboard = () => {
     hotels: '',
     tags: ''
   });
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -145,16 +144,7 @@ const Dashboard = () => {
               <button className="p-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">
                 <Bell className="h-5 w-5" />
               </button>
-              <button className="p-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">
-                <Settings className="h-5 w-5" />
-              </button>
-              <button
-                onClick={logout}
-                className="flex items-center space-x-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium"
-              >
-                <LogOut className="h-4 w-4" />
-                <span>Logout</span>
-              </button>
+              <ProfileButton />
             </div>
           </div>
         </div>
@@ -219,28 +209,20 @@ const Dashboard = () => {
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Trip Name / Destination
                     </label>
-                    <SearchBox
-                      accessToken='pk.eyJ1Ijoicm1hZDE3IiwiYSI6ImNtMnRmZDl1NDAyYjkya3NmZ2oybGUyOTgifQ.MJp5NBYhCR_G2qzoVTzQMg'
+                    <PlaceSearchInput
                       value={newTrip.place_name}
                       onChange={(value) => {
                         setNewTrip(prev => ({ ...prev, place_name: value }));
                       }}
-                      onRetrieve={(res) => {
-                        // onRetrieve receives SearchBoxRetrieveResponse with GeoJSON FeatureCollection
-                        const feature = res.features?.[0];
-                        if (feature) {
-                          const placeName = feature.properties?.full_address || feature.properties?.name || feature.place_name || '';
-                          setNewTrip(prev => ({ 
-                            ...prev, 
-                            place_name: placeName,
-                            destination: feature
-                          }));
-                        }
+                      onPlaceSelect={(place) => {
+                        const placeName = place.description || place.name || place.formatted_address || '';
+                        setNewTrip(prev => ({
+                          ...prev,
+                          place_name: placeName,
+                          destination: place
+                        }));
                       }}
                       placeholder="e.g., Paris, Tokyo, European Adventure"
-                      options={{
-                        language: 'en'
-                      }}
                     />
                   </div>
                   <div>
