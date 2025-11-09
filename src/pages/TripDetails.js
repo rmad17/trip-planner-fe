@@ -328,11 +328,26 @@ const TripDetails = () => {
   const handleUpdateTrip = async () => {
     try {
       await tripAPI.updateTrip(tripId, editedTrip);
-      setTrip(editedTrip);
+      // Refetch trip details to get the updated data from server
+      await fetchTripDetails();
       setIsEditingTrip(false);
     } catch (error) {
       setError('Failed to update trip');
       console.error('Error updating trip:', error);
+    }
+  };
+
+  const handleDeleteTrip = async () => {
+    if (!window.confirm('Are you sure you want to delete this trip? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await tripAPI.deleteTrip(tripId);
+      navigate('/dashboard');
+    } catch (error) {
+      setError('Failed to delete trip');
+      console.error('Error deleting trip:', error);
     }
   };
 
@@ -840,8 +855,16 @@ const TripDetails = () => {
                     <button
                       onClick={() => setIsEditingTrip(true)}
                       className="p-1 text-gray-300 hover:text-white transition-colors"
+                      title="Edit trip name"
                     >
                       <Edit3 className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={handleDeleteTrip}
+                      className="p-1 text-red-300 hover:text-red-200 transition-colors"
+                      title="Delete trip"
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
                 )}
@@ -1021,6 +1044,19 @@ const TripDetails = () => {
                     </>
                   ) : (
                     <div className="space-y-6">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Trip Name
+                        </label>
+                        <input
+                          type="text"
+                          value={editedTrip.name || ''}
+                          onChange={(e) => setEditedTrip(prev => ({ ...prev, name: e.target.value }))}
+                          className="input-field"
+                          placeholder="Enter trip name"
+                        />
+                      </div>
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">
