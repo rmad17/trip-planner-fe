@@ -401,7 +401,7 @@ const AITripModal = ({ isOpen, onClose, onTripCreated }) => {
                       onClick={() => togglePreference(pref.toLowerCase())}
                       className={`px-4 py-2 rounded-full text-sm transition-colors ${
                         formData.tripPreferences.includes(pref.toLowerCase())
-                          ? 'bg-primary text-white'
+                          ? 'bg-primary-600 text-white'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                     >
@@ -423,7 +423,7 @@ const AITripModal = ({ isOpen, onClose, onTripCreated }) => {
                       onClick={() => setFormData({ ...formData, pacePreference: option.value })}
                       className={`p-3 rounded-lg border-2 transition-all ${
                         formData.pacePreference === option.value
-                          ? 'border-primary bg-primary-50'
+                          ? 'border-primary-600 bg-primary-50'
                           : 'border-gray-200 hover:border-gray-300'
                       }`}
                     >
