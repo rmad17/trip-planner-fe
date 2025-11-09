@@ -3,22 +3,24 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { tripAPI } from '../services/api';
 import { SearchBox } from '@mapbox/search-js-react';
-import { 
-  Plus, 
-  MapPin, 
-  Calendar, 
-  Users, 
-  DollarSign, 
-  Plane, 
-  Car, 
-  Train, 
+import AITripModal from '../components/AITripModal';
+import {
+  Plus,
+  MapPin,
+  Calendar,
+  Users,
+  DollarSign,
+  Plane,
+  Car,
+  Train,
   Bus,
   ChevronRight,
   Search,
   Bell,
   Settings,
   LogOut,
-  Filter
+  Filter,
+  Sparkles
 } from 'lucide-react';
 
 const Dashboard = () => {
@@ -26,6 +28,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
   const [newTrip, setNewTrip] = useState({
     place_name: '',
     start_date: '',
@@ -91,6 +94,12 @@ const Dashboard = () => {
       ...newTrip,
       [e.target.name]: e.target.value
     });
+  };
+
+  const handleAITripCreated = async (tripId) => {
+    // Refresh trips and navigate to the new trip
+    await fetchTrips();
+    navigate(`/trip/${tripId}`);
   };
 
   const formatDate = (dateString) => {
@@ -163,13 +172,20 @@ const Dashboard = () => {
                 Organize trips, manage expenses, collaborate with travelers, and store documents all in one premium platform.
               </p>
             </div>
-            <div className="mt-6 lg:mt-0 lg:ml-8">
+            <div className="mt-6 lg:mt-0 lg:ml-8 flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => setShowAIModal(true)}
+                className="btn-accent flex items-center justify-center space-x-2 text-lg px-8 py-4 bg-gradient-to-r from-accent to-accent-600 hover:from-accent-600 hover:to-accent-700 shadow-lg"
+              >
+                <Sparkles className="h-5 w-5" />
+                <span>AI Trip Planner</span>
+              </button>
               <button
                 onClick={() => setShowCreateForm(!showCreateForm)}
-                className="btn-accent flex items-center space-x-2 text-lg px-8 py-4"
+                className="btn-secondary flex items-center justify-center space-x-2 text-lg px-8 py-4 bg-white text-primary-700 hover:bg-gray-50"
               >
                 <Plus className="h-5 w-5" />
-                <span>Create New Trip</span>
+                <span>Manual Create</span>
               </button>
             </div>
           </div>
@@ -451,6 +467,13 @@ const Dashboard = () => {
           </div>
         )}
       </main>
+
+      {/* AI Trip Planning Modal */}
+      <AITripModal
+        isOpen={showAIModal}
+        onClose={() => setShowAIModal(false)}
+        onTripCreated={handleAITripCreated}
+      />
     </div>
   );
 };

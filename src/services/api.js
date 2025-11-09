@@ -31,6 +31,12 @@ export const tripAPI = {
   getTripComplete: (tripId) => api.get(`/trip/${tripId}/complete`), // Uses /trip/:id/complete
   updateTrip: (tripId, tripData) => api.put(`/trip/${tripId}`, tripData), // Uses /trip/:id
   deleteTrip: (tripId) => api.delete(`/trip/${tripId}`), // Uses /trip/:id
+
+  // AI-powered trip generation
+  generateTrip: (generationData) => api.post('/trip/generate', generationData),
+  confirmAITrip: (tripPlan) => api.post('/trip/generate/confirm', tripPlan),
+  getMultiCitySuggestions: (source, destination, duration, preferences) =>
+    api.get(`/trip/suggest-cities?source=${encodeURIComponent(source)}&destination=${encodeURIComponent(destination)}&duration=${duration}&preferences=${encodeURIComponent(preferences || '')}`),
 };
 
 // Trip Hop APIs - Updated to match backend structure
