@@ -38,6 +38,11 @@ import {
   Map
 } from 'lucide-react';
 
+// Helper function to extract error messages from API responses
+const getErrorMessage = (error, defaultMessage) => {
+  return error.response?.data?.error || error.response?.data?.message || error.message || defaultMessage;
+};
+
 const TripDetails = () => {
   const { tripId } = useParams();
   const navigate = useNavigate();
@@ -171,7 +176,7 @@ const TripDetails = () => {
         fetchExpenses(),
       ]);
     } catch (error) {
-      setError('Failed to fetch trip details');
+      setError(getErrorMessage(error, 'Failed to fetch trip details. Please try again later.'));
       console.error('Error fetching trip details:', error);
     } finally {
       setLoading(false);
@@ -331,8 +336,9 @@ const TripDetails = () => {
       // Refetch trip details to get the updated data from server
       await fetchTripDetails();
       setIsEditingTrip(false);
+      setError(''); // Clear any previous errors
     } catch (error) {
-      setError('Failed to update trip');
+      setError(getErrorMessage(error, 'Failed to update trip. Please check your inputs and try again.'));
       console.error('Error updating trip:', error);
     }
   };
@@ -346,7 +352,7 @@ const TripDetails = () => {
       await tripAPI.deleteTrip(tripId);
       navigate('/dashboard');
     } catch (error) {
-      setError('Failed to delete trip');
+      setError(getErrorMessage(error, 'Failed to delete trip. Please try again.'));
       console.error('Error deleting trip:', error);
     }
   };
@@ -772,7 +778,8 @@ const TripDetails = () => {
   const sections = [
     { id: 'overview', label: 'Overview', icon: MapPin, description: 'Trip summary & details' },
     { id: 'map', label: 'Map View', icon: Map, description: 'Visualize your trip' },
-    { id: 'itinerary', label: 'Itinerary', icon: Clock, description: 'Daily schedule & activities' },
+    { id: 'activities', label: 'Activities', icon: Plus, description: 'Manage trip activities' },
+    { id: 'itinerary', label: 'Itinerary', icon: Clock, description: 'Auto-generated schedule' },
     { id: 'destinations', label: 'Destinations', icon: Navigation, description: 'Places you\'ll visit' },
     { id: 'stays', label: 'Accommodations', icon: Hotel, description: 'Where you\'ll stay' },
     { id: 'expenses', label: 'Expenses', icon: CreditCard, description: 'Track your spending' },
@@ -920,10 +927,16 @@ const TripDetails = () => {
                     <button
                       onClick={() => {
                         setIsEditingOverview(true);
+                        // Convert travel_mode string to array for editing
+                        const travelModeArray = typeof tripData.travel_mode === 'string'
+                          ? tripData.travel_mode.split(',').map(m => m.trim()).filter(m => m)
+                          : (Array.isArray(tripData.travel_mode) ? tripData.travel_mode : []);
+
                         setEditedTrip({
                           ...tripData,
                           start_date: tripData.start_date ? new Date(tripData.start_date).toISOString().split('T')[0] : '',
                           end_date: tripData.end_date ? new Date(tripData.end_date).toISOString().split('T')[0] : '',
+                          travel_mode: travelModeArray,
                           tags: Array.isArray(tripData.tags) ? tripData.tags.join(', ') : ''
                         });
                       }}
@@ -937,19 +950,28 @@ const TripDetails = () => {
                       <button
                         onClick={async () => {
                           try {
+                            // Convert travel_mode array to comma-separated string for backend
+                            const travelMode = Array.isArray(editedTrip.travel_mode)
+                              ? editedTrip.travel_mode.join(',')
+                              : editedTrip.travel_mode || '';
+
                             const updateData = {
                               ...editedTrip,
                               start_date: editedTrip.start_date ? new Date(editedTrip.start_date).toISOString() : null,
                               end_date: editedTrip.end_date ? new Date(editedTrip.end_date).toISOString() : null,
+                              travel_mode: travelMode,
                               tags: typeof editedTrip.tags === 'string'
                                 ? editedTrip.tags.split(',').map(t => t.trim()).filter(t => t)
                                 : editedTrip.tags
                             };
+
                             await tripAPI.updateTrip(tripId, updateData);
                             await fetchTripDetails();
                             setIsEditingOverview(false);
+                            setError(''); // Clear any previous errors
                           } catch (error) {
-                            setError('Failed to update trip');
+                            const errorMessage = error.response?.data?.error || error.message || 'Failed to update trip';
+                            setError(errorMessage);
                             console.error('Error updating trip:', error);
                           }
                         }}
@@ -987,24 +1009,30 @@ const TripDetails = () => {
 
                         <div>
                           <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                            Travel Mode{Array.isArray(tripData.travel_mode) && tripData.travel_mode.length > 1 ? 's' : ''}
+                            Travel Mode{(() => {
+                              const modes = typeof tripData.travel_mode === 'string'
+                                ? tripData.travel_mode.split(',').map(m => m.trim()).filter(m => m)
+                                : (Array.isArray(tripData.travel_mode) ? tripData.travel_mode : []);
+                              return modes.length > 1 ? 's' : '';
+                            })()}
                           </h3>
                           <div className="flex items-center flex-wrap gap-2 text-lg text-gray-900">
-                            {Array.isArray(tripData.travel_mode) && tripData.travel_mode.length > 0 ? (
-                              tripData.travel_mode.map((mode, idx) => (
-                                <div key={idx} className="flex items-center space-x-1">
-                                  {getTravelIcon(mode)}
-                                  <span className="capitalize text-sm">{mode}</span>
-                                </div>
-                              ))
-                            ) : tripData.travel_mode ? (
-                              <>
-                                {getTravelIcon(tripData.travel_mode)}
-                                <span className="capitalize">{tripData.travel_mode}</span>
-                              </>
-                            ) : (
-                              <span>Not specified</span>
-                            )}
+                            {(() => {
+                              // Handle both string (comma-separated) and array formats
+                              const modes = typeof tripData.travel_mode === 'string'
+                                ? tripData.travel_mode.split(',').map(m => m.trim()).filter(m => m)
+                                : (Array.isArray(tripData.travel_mode) ? tripData.travel_mode : []);
+
+                              if (modes.length > 0) {
+                                return modes.map((mode, idx) => (
+                                  <div key={idx} className="flex items-center space-x-1">
+                                    {getTravelIcon(mode)}
+                                    <span className="capitalize text-sm">{mode}</span>
+                                  </div>
+                                ));
+                              }
+                              return <span>Not specified</span>;
+                            })()}
                           </div>
                         </div>
 
@@ -2166,11 +2194,289 @@ const TripDetails = () => {
               </div>
             )}
 
+            {/* Activities Section */}
+            {activeSection === 'activities' && (
+              <div className="card">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-xl font-bold text-gray-900 font-display">Activities</h2>
+                    <button
+                      onClick={() => setShowAddForms(prev => ({ ...prev, activity: !prev.activity }))}
+                      className="btn-primary flex items-center space-x-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>Add Activity</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Add Activity Form */}
+                {showAddForms.activity && (
+                  <div className="border-b border-gray-200 p-6 bg-gray-50">
+                    <h3 className="text-lg font-medium text-gray-900 mb-4">Add New Activity</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Activity Name *</label>
+                        <input
+                          type="text"
+                          value={newActivityData.name}
+                          onChange={(e) => setNewActivityData(prev => ({ ...prev, name: e.target.value }))}
+                          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+                            !newActivityData.name ? 'border-red-300' : 'border-gray-300'
+                          }`}
+                          placeholder="e.g., Visit Eiffel Tower"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Select Day *</label>
+                        <select
+                          value={newActivityData.day_id}
+                          onChange={(e) => setNewActivityData(prev => ({ ...prev, day_id: e.target.value }))}
+                          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+                            !newActivityData.day_id ? 'border-red-300' : 'border-gray-300'
+                          }`}
+                        >
+                          <option value="">Choose a day</option>
+                          {tripDays.sort((a, b) => a.day_number - b.day_number).map(day => (
+                            <option key={day.id} value={day.id}>
+                              Day {day.day_number} - {formatDate(day.date)}
+                            </option>
+                          ))}
+                        </select>
+                        {tripDays.length === 0 && (
+                          <p className="text-xs text-amber-600 mt-1">
+                            No days available. Please create days in the Destinations section first.
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Activity Type</label>
+                        <select
+                          value={newActivityData.activity_type}
+                          onChange={(e) => setNewActivityData(prev => ({ ...prev, activity_type: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        >
+                          <option value="sightseeing">Sightseeing</option>
+                          <option value="dining">Dining</option>
+                          <option value="shopping">Shopping</option>
+                          <option value="entertainment">Entertainment</option>
+                          <option value="transport">Transport</option>
+                          <option value="accommodation">Accommodation</option>
+                          <option value="adventure">Adventure</option>
+                          <option value="cultural">Cultural</option>
+                          <option value="relaxation">Relaxation</option>
+                          <option value="business">Business</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                        <PlaceSearchInput
+                          value={newActivityData.location}
+                          onChange={(value) => setNewActivityData(prev => ({ ...prev, location: value }))}
+                          placeholder="Search for a place..."
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                        <input
+                          type="time"
+                          value={newActivityData.start_time}
+                          onChange={(e) => setNewActivityData(prev => ({ ...prev, start_time: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                        <input
+                          type="time"
+                          value={newActivityData.end_time}
+                          onChange={(e) => setNewActivityData(prev => ({ ...prev, end_time: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                        <textarea
+                          value={newActivityData.description}
+                          onChange={(e) => setNewActivityData(prev => ({ ...prev, description: e.target.value }))}
+                          rows="3"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                          placeholder="Add details about this activity..."
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Cost</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-2 text-gray-500">$</span>
+                          <input
+                            type="number"
+                            value={newActivityData.estimated_cost}
+                            onChange={(e) => setNewActivityData(prev => ({ ...prev, estimated_cost: e.target.value }))}
+                            className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                            placeholder="0.00"
+                            step="0.01"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                        <input
+                          type="text"
+                          value={newActivityData.notes}
+                          onChange={(e) => setNewActivityData(prev => ({ ...prev, notes: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                          placeholder="Additional notes..."
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end space-x-3 mt-6">
+                      <button
+                        onClick={() => setShowAddForms(prev => ({ ...prev, activity: false }))}
+                        className="btn-secondary"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleCreateActivity}
+                        className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                          !newActivityData.name || !newActivityData.day_id
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : 'bg-primary-600 text-white hover:bg-primary-700'
+                        }`}
+                        disabled={!newActivityData.name || !newActivityData.day_id}
+                      >
+                        Add Activity
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Activities List */}
+                <div className="p-6">
+                  {itinerary.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Clock className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No activities yet</h3>
+                      <p className="text-gray-600">Add activities to plan your trip</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {(() => {
+                        const groupedByDay = itinerary.reduce((acc, dayItem) => {
+                          const dayNum = dayItem.day_number;
+                          if (!acc[dayNum]) {
+                            acc[dayNum] = {
+                              day_number: dayNum,
+                              date: dayItem.date,
+                              all_activities: []
+                            };
+                          }
+                          if (dayItem.activities) {
+                            acc[dayNum].all_activities.push(...dayItem.activities);
+                          }
+                          return acc;
+                        }, {});
+
+                        const sortedDays = Object.values(groupedByDay).sort((a, b) => a.day_number - b.day_number);
+
+                        return sortedDays.map((groupedDay) => (
+                          <div key={groupedDay.day_number} className="border border-gray-200 rounded-lg overflow-hidden">
+                            <div className="bg-gradient-to-r from-primary-50 to-accent-50 px-6 py-4 border-b border-gray-200">
+                              <div className="flex justify-between items-center">
+                                <div>
+                                  <h3 className="font-semibold text-gray-900">Day {groupedDay.day_number}</h3>
+                                  <p className="text-sm text-gray-600">{formatDate(groupedDay.date)}</p>
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                  {groupedDay.all_activities.length} {groupedDay.all_activities.length === 1 ? 'activity' : 'activities'}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="p-4">
+                              {groupedDay.all_activities.length === 0 ? (
+                                <p className="text-gray-500 text-sm">No activities planned for this day</p>
+                              ) : (
+                                <div className="relative space-y-3">
+                                  {groupedDay.all_activities.map((activity, index) => (
+                                    <div key={activity.id || index} className="relative">
+                                      {index > 0 && (
+                                        <div className="absolute -top-3 left-5 w-0.5 h-3 border-l-2 border-dashed border-gray-300"></div>
+                                      )}
+                                      <div className="flex items-start space-x-3 p-3 bg-white rounded-lg border border-gray-100">
+                                        <Clock className="h-4 w-4 text-gray-400 mt-0.5" />
+                                        <div className="flex-1">
+                                          <div className="flex justify-between items-start">
+                                            <div className="flex-1">
+                                              <h4 className="font-medium text-gray-900">{activity.name || activity.title}</h4>
+                                              {activity.description && (
+                                                <p className="text-sm text-gray-600 mt-1">{activity.description}</p>
+                                              )}
+                                              {activity.activity_type && (
+                                                <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded capitalize">
+                                                  {activity.activity_type}
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="flex items-center space-x-2">
+                                              <div className="text-sm text-gray-500 text-right">
+                                                {activity.start_time && (
+                                                  <div>{new Date(activity.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                                )}
+                                                {activity.estimated_cost && (
+                                                  <div className="mt-1">{formatCurrency(activity.estimated_cost)}</div>
+                                                )}
+                                              </div>
+                                              <div className="flex items-center space-x-1 ml-2">
+                                                <button
+                                                  onClick={() => handleDeleteActivity(activity.id)}
+                                                  className="text-red-600 hover:text-red-700 p-1"
+                                                  title="Delete activity"
+                                                >
+                                                  <Trash2 className="h-3 w-3" />
+                                                </button>
+                                              </div>
+                                            </div>
+                                          </div>
+                                          {activity.location && (
+                                            <div className="flex items-center space-x-1 mt-2 text-sm text-gray-500">
+                                              <MapPin className="h-3 w-3" />
+                                              <span>{activity.location}</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {activeSection === 'itinerary' && (
               <div className="card">
                 <div className="px-6 py-4 border-b border-gray-200">
                   <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-gray-900 font-display">Itinerary</h2>
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-900 font-display">Itinerary</h2>
+                      <p className="text-sm text-gray-600 mt-1">Auto-generated from your activities</p>
+                    </div>
                     <div className="flex items-center space-x-3">
                       {/* View Mode Toggle */}
                       <div className="flex rounded-md shadow-sm">
@@ -2198,7 +2504,7 @@ const TripDetails = () => {
                           Single Day
                         </button>
                       </div>
-                      
+
                       {/* Day Selector for single day view */}
                       {itineraryViewMode === 'day' && (
                         <select
@@ -2218,20 +2524,12 @@ const TripDetails = () => {
                           ))}
                         </select>
                       )}
-                      
-                      <button
-                        onClick={() => setShowAddForms(prev => ({ ...prev, activity: !prev.activity }))}
-                        className="btn-primary flex items-center space-x-2"
-                      >
-                        <Plus className="h-4 w-4" />
-                        <span>Add Activity</span>
-                      </button>
                     </div>
                   </div>
                 </div>
 
-                {/* Add Activity Form */}
-                {showAddForms.activity && (
+                {/* Remove Add Activity Form from Itinerary */}
+                {false && showAddForms.activity && (
                   <div className="border-b border-gray-200 p-6 bg-gray-50">
                     <h3 className="text-lg font-medium text-gray-900 mb-4">Add New Activity</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2473,9 +2771,14 @@ const TripDetails = () => {
                                   {!groupedDay.all_activities || groupedDay.all_activities.length === 0 ? (
                                     <p className="text-gray-500 text-sm">No activities planned for this day</p>
                                   ) : (
-                                    <div className="space-y-3">
+                                    <div className="relative space-y-3">
                                       {groupedDay.all_activities.map((activity, index) => (
-                                        <div key={activity.id || index} className="flex items-start space-x-3 p-3 bg-white rounded-lg border border-gray-100">
+                                        <div key={activity.id || index} className="relative">
+                                          {/* Dotted connector line between activities */}
+                                          {index > 0 && (
+                                            <div className="absolute -top-3 left-5 w-0.5 h-3 border-l-2 border-dashed border-gray-300"></div>
+                                          )}
+                                          <div className="flex items-start space-x-3 p-3 bg-white rounded-lg border border-gray-100">
                                           <Clock className="h-4 w-4 text-gray-400 mt-0.5" />
                                           <div className="flex-1">
                                             <div className="flex justify-between items-start">
@@ -2523,6 +2826,7 @@ const TripDetails = () => {
                                                 <span>{activity.location}</span>
                                               </div>
                                             )}
+                                          </div>
                                           </div>
                                         </div>
                                       ))}
@@ -2572,9 +2876,14 @@ const TripDetails = () => {
                             {!selectedDayItinerary.data?.activities || selectedDayItinerary.data.activities.length === 0 ? (
                               <p className="text-gray-500 text-sm">No activities planned for this day</p>
                             ) : (
-                              <div className="space-y-3">
+                              <div className="relative space-y-3">
                                 {selectedDayItinerary.data.activities.map((activity, index) => (
-                                  <div key={activity.id || index} className="flex items-start space-x-3 p-3 bg-white rounded-lg border border-gray-100">
+                                  <div key={activity.id || index} className="relative">
+                                    {/* Dotted connector line between activities */}
+                                    {index > 0 && (
+                                      <div className="absolute -top-3 left-5 w-0.5 h-3 border-l-2 border-dashed border-gray-300"></div>
+                                    )}
+                                    <div className="flex items-start space-x-3 p-3 bg-white rounded-lg border border-gray-100">
                                     <Clock className="h-4 w-4 text-gray-400 mt-0.5" />
                                     <div className="flex-1">
                                       <div className="flex justify-between items-start">
@@ -2617,6 +2926,7 @@ const TripDetails = () => {
                                           <span>{activity.location}</span>
                                         </div>
                                       )}
+                                    </div>
                                     </div>
                                   </div>
                                 ))}

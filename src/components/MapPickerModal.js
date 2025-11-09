@@ -25,7 +25,9 @@ const MapPickerModal = ({
   provider = 'mapbox'
 }) => {
   const mapContainer = useRef(null);
+  const minimapContainer = useRef(null);
   const map = useRef(null);
+  const minimap = useRef(null);
   const marker = useRef(null);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [isGeocoding, setIsGeocoding] = useState(false);
@@ -100,6 +102,92 @@ const MapPickerModal = ({
       // Add navigation controls
       map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
+      // Initialize minimap
+      if (minimapContainer.current) {
+        minimap.current = new mapboxgl.Map({
+          container: minimapContainer.current,
+          style: 'mapbox://styles/mapbox/satellite-streets-v12',
+          center: [initialCenter.lng, initialCenter.lat],
+          zoom: 0,
+          interactive: false,
+          attributionControl: false
+        });
+
+        // Sync minimap with main map movements
+        const syncMinimap = () => {
+          if (minimap.current && map.current) {
+            minimap.current.setCenter(map.current.getCenter());
+            // Keep minimap zoomed out relative to main map
+            const mainZoom = map.current.getZoom();
+            minimap.current.setZoom(Math.max(0, mainZoom - 3));
+          }
+        };
+
+        map.current.on('move', syncMinimap);
+        map.current.on('zoom', syncMinimap);
+
+        // Add a box showing the main map viewport on the minimap
+        minimap.current.on('load', () => {
+          minimap.current.addSource('viewport', {
+            type: 'geojson',
+            data: {
+              type: 'Feature',
+              geometry: {
+                type: 'Polygon',
+                coordinates: [[]]
+              }
+            }
+          });
+
+          minimap.current.addLayer({
+            id: 'viewport',
+            type: 'fill',
+            source: 'viewport',
+            paint: {
+              'fill-color': '#4f46e5',
+              'fill-opacity': 0.1
+            }
+          });
+
+          minimap.current.addLayer({
+            id: 'viewport-outline',
+            type: 'line',
+            source: 'viewport',
+            paint: {
+              'line-color': '#4f46e5',
+              'line-width': 2
+            }
+          });
+        });
+
+        // Update viewport box on main map move
+        const updateViewportBox = () => {
+          if (!minimap.current || !map.current) return;
+
+          const bounds = map.current.getBounds();
+          const coords = [
+            [bounds.getWest(), bounds.getNorth()],
+            [bounds.getEast(), bounds.getNorth()],
+            [bounds.getEast(), bounds.getSouth()],
+            [bounds.getWest(), bounds.getSouth()],
+            [bounds.getWest(), bounds.getNorth()]
+          ];
+
+          if (minimap.current.getSource('viewport')) {
+            minimap.current.getSource('viewport').setData({
+              type: 'Feature',
+              geometry: {
+                type: 'Polygon',
+                coordinates: [coords]
+              }
+            });
+          }
+        };
+
+        map.current.on('move', updateViewportBox);
+        map.current.on('zoom', updateViewportBox);
+      }
+
       // Handle map clicks
       map.current.on('click', async (e) => {
         const { lng, lat } = e.lngLat;
@@ -130,6 +218,10 @@ const MapPickerModal = ({
 
     // Cleanup when modal closes
     return () => {
+      if (minimap.current) {
+        minimap.current.remove();
+        minimap.current = null;
+      }
       if (map.current) {
         map.current.remove();
         map.current = null;
@@ -189,6 +281,13 @@ const MapPickerModal = ({
           {/* Map Container */}
           <div className="flex-1 relative" style={{ minHeight: '500px' }}>
             <div ref={mapContainer} className="absolute inset-0" />
+
+            {/* Minimap */}
+            <div
+              ref={minimapContainer}
+              className="absolute bottom-4 right-4 w-48 h-32 rounded-lg shadow-lg border-2 border-white overflow-hidden z-10"
+              style={{ pointerEvents: 'none' }}
+            />
 
             {/* Map Loading Indicator */}
             {mapLoading && !mapError && (

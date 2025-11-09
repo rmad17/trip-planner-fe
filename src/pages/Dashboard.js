@@ -20,7 +20,8 @@ import {
   Bell,
   Filter,
   Sparkles,
-  X
+  X,
+  Trash2
 } from 'lucide-react';
 
 const Dashboard = () => {
@@ -51,11 +52,26 @@ const Dashboard = () => {
     try {
       const response = await tripAPI.getAllTrips();
       setTrips(response.data.trip_plans || []);
+      setError(''); // Clear any previous errors
     } catch (error) {
-      setError('Failed to fetch trips');
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch trips. Please try again later.';
+      setError(errorMessage);
       console.error('Error fetching trips:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteTrip = async (tripId) => {
+    try {
+      await tripAPI.deleteTrip(tripId);
+      // Remove the trip from the local state
+      setTrips(prevTrips => prevTrips.filter(trip => trip.id !== tripId));
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to delete trip';
+      setError(errorMessage);
+      console.error('Error deleting trip:', error);
+      throw error; // Re-throw to let the TripCard handle the error state
     }
   };
 
@@ -83,9 +99,11 @@ const Dashboard = () => {
         hotels: '',
         tags: ''
       });
+      setError(''); // Clear any previous errors
       fetchTrips();
     } catch (error) {
-      setError('Failed to create trip');
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to create trip. Please check your inputs and try again.';
+      setError(errorMessage);
       console.error('Error creating trip:', error);
     }
   };
@@ -467,15 +485,27 @@ const Dashboard = () => {
             {trips.map((trip) => (
               <div
                 key={trip.id}
-                className="card-hover cursor-pointer transform hover:scale-105 transition-all duration-200"
+                className="card-hover cursor-pointer transform hover:scale-105 transition-all duration-200 group"
                 onClick={() => navigate(`/trip/${trip.id}`)}
               >
                 <div className="h-48 bg-accent-400 relative overflow-hidden">
                   <div className="absolute inset-0 bg-opacity-20"></div>
-                  <div className="absolute top-4 right-4">
+                  <div className="absolute top-4 right-4 flex items-center space-x-2">
                     <div className="bg-white bg-opacity-90 rounded-full p-2">
                       {getTravelIcon(trip.travel_mode)}
                     </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm(`Are you sure you want to delete "${trip.name}"? This action cannot be undone.`)) {
+                          handleDeleteTrip(trip.id);
+                        }
+                      }}
+                      className="p-2 bg-red-500 bg-opacity-80 hover:bg-opacity-100 rounded-full text-white transition-all opacity-0 group-hover:opacity-100"
+                      title="Delete trip"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
                   <div className="absolute bottom-4 left-4 text-white">
                     <h3 className="text-xl font-bold font-display mb-1">
