@@ -1,0 +1,451 @@
+/**
+ * Tests for TripDetails component
+ */
+
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
+import '@testing-library/jest-dom';
+import TripDetails from './TripDetails';
+import { AuthProvider } from '../contexts/AuthContext';
+import * as api from '../services/api';
+
+// Mock react-router-dom
+const mockNavigate = jest.fn();
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useParams: () => ({ tripId: 'test-trip-123' }),
+  useNavigate: () => mockNavigate
+}));
+
+// Mock API services
+jest.mock('../services/api');
+
+// Mock components
+jest.mock('../components/PlaceSearchInput', () => {
+  return function MockPlaceSearchInput() {
+    return <div data-testid="place-search">Place Search</div>;
+  };
+});
+
+jest.mock('../components/ProfileButton', () => {
+  return function MockProfileButton() {
+    return <div data-testid="profile-button">Profile</div>;
+  };
+});
+
+const mockTripData = {
+  id: 'test-trip-123',
+  name: 'Paris Adventure',
+  start_date: '2024-06-01T00:00:00Z',
+  end_date: '2024-06-07T00:00:00Z',
+  travel_mode: 'flight',
+  notes: 'Summer vacation trip',
+  tags: ['romantic', 'cultural'],
+  user: {
+    id: 'user-123',
+    username: 'traveler'
+  }
+};
+
+const mockUser = {
+  id: 'user-123',
+  username: 'traveler',
+  email: 'traveler@example.com'
+};
+
+const renderWithProviders = (component) => {
+  return render(
+    <BrowserRouter>
+      <AuthProvider value={{ user: mockUser }}>
+        {component}
+      </AuthProvider>
+    </BrowserRouter>
+  );
+};
+
+describe('TripDetails', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+
+    // Mock successful API responses
+    api.tripAPI.getTripComplete.mockResolvedValue({
+      data: {
+        trip: mockTripData,
+        trip_hops: [],
+        trip_days: []
+      }
+    });
+
+    api.tripHopAPI.getTripHops.mockResolvedValue({ data: { trip_hops: [] } });
+    api.tripDayAPI.getTripDays.mockResolvedValue({ data: { trip_days: [] } });
+    api.itineraryAPI.getItinerary.mockResolvedValue({ data: { itinerary: [] } });
+    api.documentAPI.getDocuments.mockResolvedValue({ data: { documents: [] } });
+    api.staysAPI.getStays.mockResolvedValue({ data: { stays: [] } });
+    api.expensesAPI.getExpenses.mockResolvedValue({ data: { expenses: [] } });
+    api.expensesAPI.getExpensesSummary.mockResolvedValue({
+      data: { total: 0, budget: 1000, remaining: 1000 }
+    });
+  });
+
+  describe('Component Rendering', () => {
+    it('should show loading state initially', () => {
+      renderWithProviders(<TripDetails />);
+      expect(screen.getByText('Loading trip details...')).toBeInTheDocument();
+    });
+
+    it('should render trip details after loading', async () => {
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Paris Adventure')).toBeInTheDocument();
+      });
+    });
+
+    it('should render all navigation tabs', async () => {
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Overview')).toBeInTheDocument();
+        expect(screen.getByText('Itinerary')).toBeInTheDocument();
+        expect(screen.getByText('Destinations')).toBeInTheDocument();
+        expect(screen.getByText('Accommodations')).toBeInTheDocument();
+        expect(screen.getByText('Expenses')).toBeInTheDocument();
+        expect(screen.getByText('Documents')).toBeInTheDocument();
+      });
+    });
+
+    it('should show ProfileButton in header', async () => {
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('profile-button')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Tab Navigation', () => {
+    it('should show overview section by default', async () => {
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Trip Overview')).toBeInTheDocument();
+      });
+    });
+
+    it('should switch to expenses section when clicked', async () => {
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        const expensesTab = screen.getByText('Expenses');
+        fireEvent.click(expensesTab);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/Track your spending/)).toBeInTheDocument();
+      });
+    });
+
+    it('should highlight active tab', async () => {
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        const overviewTab = screen.getByText('Overview').closest('button');
+        expect(overviewTab).toHaveClass('border-primary-600');
+      });
+    });
+  });
+
+  describe('Trip Overview Editing', () => {
+    it('should show edit button in overview section', async () => {
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        const editButton = screen.getByRole('button', { name: /Edit/i });
+        expect(editButton).toBeInTheDocument();
+      });
+    });
+
+    it('should enable edit mode when edit button clicked', async () => {
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        const editButton = screen.getByRole('button', { name: /Edit/i });
+        fireEvent.click(editButton);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Save/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Cancel/i })).toBeInTheDocument();
+      });
+    });
+
+    it('should cancel editing when cancel button clicked', async () => {
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        fireEvent.click(screen.getByRole('button', { name: /Edit/i }));
+      });
+
+      await waitFor(() => {
+        fireEvent.click(screen.getByRole('button', { name: /Cancel/i }));
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByRole('button', { name: /Save/i })).not.toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Expense Management', () => {
+    beforeEach(() => {
+      api.expensesAPI.getExpenses.mockResolvedValue({
+        data: {
+          expenses: [
+            {
+              id: 'exp-1',
+              title: 'Hotel Stay',
+              amount: 150,
+              category: 'accommodation',
+              date: '2024-06-01T00:00:00Z',
+              currency: 'USD'
+            }
+          ]
+        }
+      });
+    });
+
+    it('should display expenses list', async () => {
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        fireEvent.click(screen.getByText('Expenses'));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Hotel Stay')).toBeInTheDocument();
+      });
+    });
+
+    it('should show add expense button', async () => {
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        fireEvent.click(screen.getByText('Expenses'));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Add Expense/i })).toBeInTheDocument();
+      });
+    });
+
+    it('should open add expense form when button clicked', async () => {
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        fireEvent.click(screen.getByText('Expenses'));
+      });
+
+      await waitFor(() => {
+        fireEvent.click(screen.getByRole('button', { name: /Add Expense/i }));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Add New Expense')).toBeInTheDocument();
+      });
+    });
+
+    it('should show expense summary', async () => {
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        fireEvent.click(screen.getByText('Expenses'));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Total Spent')).toBeInTheDocument();
+        expect(screen.getByText('Budget')).toBeInTheDocument();
+        expect(screen.getByText('Remaining')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Accommodation Management', () => {
+    beforeEach(() => {
+      api.tripHopAPI.getTripHops.mockResolvedValue({
+        data: {
+          trip_hops: [
+            {
+              id: 'hop-1',
+              name: 'Paris',
+              city: 'Paris',
+              country: 'France'
+            }
+          ]
+        }
+      });
+
+      api.staysAPI.getStays.mockResolvedValue({
+        data: {
+          stays: [
+            {
+              id: 'stay-1',
+              name: 'Grand Hotel',
+              trip_hop: 'hop-1',
+              check_in: '2024-06-01T00:00:00Z',
+              check_out: '2024-06-03T00:00:00Z',
+              cost: 300
+            }
+          ]
+        }
+      });
+    });
+
+    it('should display accommodations list', async () => {
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        fireEvent.click(screen.getByText('Accommodations'));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Grand Hotel')).toBeInTheDocument();
+      });
+    });
+
+    it('should show add stay button', async () => {
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        fireEvent.click(screen.getByText('Accommodations'));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Add Stay/i })).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Itinerary View', () => {
+    beforeEach(() => {
+      api.itineraryAPI.getItinerary.mockResolvedValue({
+        data: {
+          itinerary: [
+            {
+              day_number: 1,
+              date: '2024-06-01',
+              title: 'Arrival Day',
+              day_type: 'travel',
+              activities: [
+                {
+                  id: 'act-1',
+                  name: 'Airport Transfer',
+                  start_time: '2024-06-01T10:00:00Z'
+                }
+              ]
+            },
+            {
+              day_number: 1,
+              date: '2024-06-01',
+              title: 'Evening Exploration',
+              day_type: 'explore',
+              activities: [
+                {
+                  id: 'act-2',
+                  name: 'Eiffel Tower Visit',
+                  start_time: '2024-06-01T18:00:00Z'
+                }
+              ]
+            }
+          ]
+        }
+      });
+    });
+
+    it('should group multiple plans for same day', async () => {
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        fireEvent.click(screen.getByText('Itinerary'));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/2 plans/i)).toBeInTheDocument();
+        expect(screen.getByText('Arrival Day')).toBeInTheDocument();
+        expect(screen.getByText('Evening Exploration')).toBeInTheDocument();
+      });
+    });
+
+    it('should display all activities for a day', async () => {
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        fireEvent.click(screen.getByText('Itinerary'));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Airport Transfer')).toBeInTheDocument();
+        expect(screen.getByText('Eiffel Tower Visit')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should show error message when trip load fails', async () => {
+      api.tripAPI.getTripComplete.mockRejectedValue(new Error('Failed to load'));
+
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Failed to fetch trip details/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should show back to dashboard button on error', async () => {
+      api.tripAPI.getTripComplete.mockRejectedValue(new Error('Not found'));
+
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        const backButton = screen.getByRole('button', { name: /Back to Dashboard/i });
+        expect(backButton).toBeInTheDocument();
+      });
+    });
+
+    it('should navigate to dashboard when back button clicked', async () => {
+      api.tripAPI.getTripComplete.mockRejectedValue(new Error('Not found'));
+
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        fireEvent.click(screen.getByRole('button', { name: /Back to Dashboard/i }));
+      });
+
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
+    });
+  });
+
+  describe('Navigation', () => {
+    it('should navigate back to dashboard when back button clicked', async () => {
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        const backButton = screen.getByRole('button', { name: '' });
+        fireEvent.click(backButton);
+      });
+
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
+    });
+  });
+
+  describe('Responsive Design', () => {
+    it('should render tab descriptions on desktop', async () => {
+      renderWithProviders(<TripDetails />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Trip summary & details')).toBeInTheDocument();
+        expect(screen.getByText('Daily schedule & activities')).toBeInTheDocument();
+      });
+    });
+  });
+});
