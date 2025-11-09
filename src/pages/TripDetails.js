@@ -2,15 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import PlaceSearchInput from '../components/PlaceSearchInput';
-import { 
-  tripAPI, 
-  tripHopAPI, 
-  tripDayAPI, 
-  itineraryAPI, 
-  documentAPI, 
-  staysAPI, 
+import {
+  tripAPI,
+  tripHopAPI,
+  tripDayAPI,
+  itineraryAPI,
+  documentAPI,
+  staysAPI,
   expensesAPI,
-  placesAPI,
   activityAPI
 } from '../services/api';
 import {
@@ -547,6 +546,7 @@ const TripDetails = () => {
     }
   };
 
+  // eslint-disable-next-line no-unused-vars
   const handleUpdateActivity = async (activityId, updatedData) => {
     try {
       const activityData = {

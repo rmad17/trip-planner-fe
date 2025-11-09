@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { X, MapPin, Loader2 } from 'lucide-react';
@@ -30,6 +30,28 @@ const MapPickerModal = ({
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [error, setError] = useState(null);
+
+  // Handle location selection with reverse geocoding
+  const handleLocationSelect = useCallback(async (lng, lat) => {
+    setIsGeocoding(true);
+    setError(null);
+
+    try {
+      const placeData = await reverseGeocode(lng, lat, provider);
+      setSelectedLocation(placeData);
+    } catch (err) {
+      console.error('Geocoding error:', err);
+      setError('Unable to find address for this location');
+      setSelectedLocation({
+        description: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+        name: 'Unknown location',
+        formatted_address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+        coordinates: { lng, lat }
+      });
+    } finally {
+      setIsGeocoding(false);
+    }
+  }, [provider]);
 
   // Initialize map
   useEffect(() => {
@@ -79,29 +101,7 @@ const MapPickerModal = ({
         marker.current = null;
       }
     };
-  }, [isOpen]);
-
-  // Handle location selection with reverse geocoding
-  const handleLocationSelect = async (lng, lat) => {
-    setIsGeocoding(true);
-    setError(null);
-
-    try {
-      const placeData = await reverseGeocode(lng, lat, provider);
-      setSelectedLocation(placeData);
-    } catch (err) {
-      console.error('Geocoding error:', err);
-      setError('Unable to find address for this location');
-      setSelectedLocation({
-        description: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
-        name: 'Unknown location',
-        formatted_address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
-        coordinates: { lng, lat }
-      });
-    } finally {
-      setIsGeocoding(false);
-    }
-  };
+  }, [isOpen, handleLocationSelect, initialCenter.lng, initialCenter.lat]);
 
   // Confirm selection
   const handleConfirm = () => {

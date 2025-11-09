@@ -4,6 +4,7 @@
  */
 
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN;
+// eslint-disable-next-line no-unused-vars
 const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_KEY; // For future use
 
 /**
