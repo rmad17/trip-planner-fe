@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { SearchBox } from '@mapbox/search-js-react';
+import PlaceSearchInput from '../components/PlaceSearchInput';
 import { 
   tripAPI, 
   tripHopAPI, 
@@ -940,40 +940,46 @@ const TripDetails = () => {
                       </div>
                       <div className="md:col-span-2">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Location (City, Country) *</label>
-                        <SearchBox
-                          accessToken='pk.eyJ1Ijoicm1hZDE3IiwiYSI6ImNtMnRmZDl1NDAyYjkya3NmZ2oybGUyOTgifQ.MJp5NBYhCR_G2qzoVTzQMg'
+                        <PlaceSearchInput
                           value={newHopData.city ? `${newHopData.city}, ${newHopData.country}` : ''}
-                          onSuggest={(res) => {
-                            // onSuggest receives SearchBoxSuggestionResponse - handle typing but wait for onRetrieve for final data
+                          onChange={(value) => {
+                            // Clear selection when typing
+                            const parts = value.split(',');
+                            if (parts.length >= 2) {
+                              setNewHopData(prev => ({
+                                ...prev,
+                                city: parts[0].trim(),
+                                country: parts.slice(-1)[0].trim()
+                              }));
+                            } else {
+                              setNewHopData(prev => ({
+                                ...prev,
+                                city: value,
+                                country: ''
+                              }));
+                            }
                           }}
-                          onRetrieve={(res) => {
-                            // onRetrieve receives SearchBoxRetrieveResponse with GeoJSON FeatureCollection
-                            const feature = res.features?.[0];
-                            if (feature) {
-                              const fullAddress = feature.properties?.full_address || feature.properties?.name || feature.place_name || '';
-                              const parts = fullAddress.split(',');
-                              
-                              if (parts.length >= 2) {
-                                setNewHopData(prev => ({
-                                  ...prev,
-                                  city: parts[0].trim(),
-                                  country: parts.slice(-1)[0].trim(),
-                                  place_id: feature.id
-                                }));
-                              } else {
-                                setNewHopData(prev => ({
-                                  ...prev,
-                                  city: fullAddress,
-                                  country: '',
-                                  place_id: feature.id
-                                }));
-                              }
+                          onPlaceSelect={(place) => {
+                            const fullAddress = place.formatted_address || place.description || '';
+                            const parts = fullAddress.split(',');
+
+                            if (parts.length >= 2) {
+                              setNewHopData(prev => ({
+                                ...prev,
+                                city: parts[0].trim(),
+                                country: parts.slice(-1)[0].trim(),
+                                place_id: place.id || place.place_id
+                              }));
+                            } else {
+                              setNewHopData(prev => ({
+                                ...prev,
+                                city: fullAddress,
+                                country: '',
+                                place_id: place.id || place.place_id
+                              }));
                             }
                           }}
                           placeholder="e.g., Paris, France"
-                          options={{
-                            language: 'en'
-                          }}
                         />
                       </div>
                       <div>
@@ -1056,40 +1062,43 @@ const TripDetails = () => {
                                 />
                               </div>
                               <div>
-                                <SearchBox
-                                  accessToken='pk.eyJ1Ijoicm1hZDE3IiwiYSI6ImNtMnRmZDl1NDAyYjkya3NmZ2oybGUyOTgifQ.MJp5NBYhCR_G2qzoVTzQMg'
+                                <PlaceSearchInput
                                   value={editingHop.city && editingHop.country ? `${editingHop.city}, ${editingHop.country}` : editingHop.city || ''}
-                                  onSuggest={(res) => {
-                                    // onSuggest receives SearchBoxSuggestionResponse - handle typing but wait for onRetrieve for final data
+                                  onChange={(value) => {
+                                    const parts = value.split(',');
+                                    if (parts.length >= 2) {
+                                      setEditingHop(prev => ({
+                                        ...prev,
+                                        city: parts[0].trim(),
+                                        country: parts.slice(-1)[0].trim()
+                                      }));
+                                    } else {
+                                      setEditingHop(prev => ({
+                                        ...prev,
+                                        city: value
+                                      }));
+                                    }
                                   }}
-                                  onRetrieve={(res) => {
-                                    // onRetrieve receives SearchBoxRetrieveResponse with GeoJSON FeatureCollection
-                                    const feature = res.features?.[0];
-                                    if (feature) {
-                                      const fullAddress = feature.properties?.full_address || feature.properties?.name || feature.place_name || '';
-                                      const parts = fullAddress.split(',');
-                                      
-                                      if (parts.length >= 2) {
-                                        setEditingHop(prev => ({
-                                          ...prev,
-                                          city: parts[0].trim(),
-                                          country: parts.slice(-1)[0].trim(),
-                                          place_id: feature.id
-                                        }));
-                                      } else {
-                                        setEditingHop(prev => ({
-                                          ...prev,
-                                          city: fullAddress,
-                                          place_id: feature.id
-                                        }));
-                                      }
+                                  onPlaceSelect={(place) => {
+                                    const fullAddress = place.formatted_address || place.description || '';
+                                    const parts = fullAddress.split(',');
+
+                                    if (parts.length >= 2) {
+                                      setEditingHop(prev => ({
+                                        ...prev,
+                                        city: parts[0].trim(),
+                                        country: parts.slice(-1)[0].trim(),
+                                        place_id: place.id || place.place_id
+                                      }));
+                                    } else {
+                                      setEditingHop(prev => ({
+                                        ...prev,
+                                        city: fullAddress,
+                                        place_id: place.id || place.place_id
+                                      }));
                                     }
                                   }}
                                   placeholder="City, Country"
-                                  options={{
-                                    language: 'en',
-                                    country: 'US'
-                                  }}
                                 />
                               </div>
                               <textarea
@@ -1620,24 +1629,16 @@ const TripDetails = () => {
                       </div>
                       <div className="md:col-span-2">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                        <SearchBox
-                          accessToken='pk.eyJ1Ijoicm1hZDE3IiwiYSI6ImNtMnRmZDl1NDAyYjkya3NmZ2oybGUyOTgifQ.MJp5NBYhCR_G2qzoVTzQMg'
+                        <PlaceSearchInput
                           value={newActivityData.location}
-                          onSuggest={(res) => {
-                            // onSuggest receives SearchBoxSuggestionResponse - handle typing but wait for onRetrieve for final data
+                          onChange={(value) => {
+                            setNewActivityData(prev => ({ ...prev, location: value }));
                           }}
-                          onRetrieve={(res) => {
-                            // onRetrieve receives SearchBoxRetrieveResponse with GeoJSON FeatureCollection
-                            const feature = res.features?.[0];
-                            if (feature) {
-                              const location = feature.properties?.full_address || feature.properties?.name || feature.place_name || '';
-                              setNewActivityData(prev => ({ ...prev, location: location }));
-                            }
+                          onPlaceSelect={(place) => {
+                            const location = place.formatted_address || place.name || place.description || '';
+                            setNewActivityData(prev => ({ ...prev, location: location }));
                           }}
                           placeholder="Search for a location..."
-                          options={{
-                            language: 'en'
-                          }}
                         />
                       </div>
                       <div className="md:col-span-2">

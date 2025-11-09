@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { tripAPI } from '../services/api';
-import { SearchBox } from '@mapbox/search-js-react';
+import PlaceSearchInput from '../components/PlaceSearchInput';
 import AITripModal from '../components/AITripModal';
 import {
   Plus,
@@ -219,28 +219,20 @@ const Dashboard = () => {
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Trip Name / Destination
                     </label>
-                    <SearchBox
-                      accessToken='pk.eyJ1Ijoicm1hZDE3IiwiYSI6ImNtMnRmZDl1NDAyYjkya3NmZ2oybGUyOTgifQ.MJp5NBYhCR_G2qzoVTzQMg'
+                    <PlaceSearchInput
                       value={newTrip.place_name}
                       onChange={(value) => {
                         setNewTrip(prev => ({ ...prev, place_name: value }));
                       }}
-                      onRetrieve={(res) => {
-                        // onRetrieve receives SearchBoxRetrieveResponse with GeoJSON FeatureCollection
-                        const feature = res.features?.[0];
-                        if (feature) {
-                          const placeName = feature.properties?.full_address || feature.properties?.name || feature.place_name || '';
-                          setNewTrip(prev => ({ 
-                            ...prev, 
-                            place_name: placeName,
-                            destination: feature
-                          }));
-                        }
+                      onPlaceSelect={(place) => {
+                        const placeName = place.description || place.name || place.formatted_address || '';
+                        setNewTrip(prev => ({
+                          ...prev,
+                          place_name: placeName,
+                          destination: place
+                        }));
                       }}
                       placeholder="e.g., Paris, Tokyo, European Adventure"
-                      options={{
-                        language: 'en'
-                      }}
                     />
                   </div>
                   <div>
