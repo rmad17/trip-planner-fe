@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import PlaceSearchInput from '../components/PlaceSearchInput';
 import ProfileButton from '../components/ProfileButton';
+import MapPickerModal from '../components/MapPickerModal';
 import {
   tripAPI,
   tripHopAPI,
@@ -33,7 +34,8 @@ import {
   FileText,
   Hotel,
   CreditCard,
-  Navigation
+  Navigation,
+  Map
 } from 'lucide-react';
 
 const TripDetails = () => {
@@ -326,11 +328,26 @@ const TripDetails = () => {
   const handleUpdateTrip = async () => {
     try {
       await tripAPI.updateTrip(tripId, editedTrip);
-      setTrip(editedTrip);
+      // Refetch trip details to get the updated data from server
+      await fetchTripDetails();
       setIsEditingTrip(false);
     } catch (error) {
       setError('Failed to update trip');
       console.error('Error updating trip:', error);
+    }
+  };
+
+  const handleDeleteTrip = async () => {
+    if (!window.confirm('Are you sure you want to delete this trip? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await tripAPI.deleteTrip(tripId);
+      navigate('/dashboard');
+    } catch (error) {
+      setError('Failed to delete trip');
+      console.error('Error deleting trip:', error);
     }
   };
 
@@ -754,6 +771,7 @@ const TripDetails = () => {
 
   const sections = [
     { id: 'overview', label: 'Overview', icon: MapPin, description: 'Trip summary & details' },
+    { id: 'map', label: 'Map View', icon: Map, description: 'Visualize your trip' },
     { id: 'itinerary', label: 'Itinerary', icon: Clock, description: 'Daily schedule & activities' },
     { id: 'destinations', label: 'Destinations', icon: Navigation, description: 'Places you\'ll visit' },
     { id: 'stays', label: 'Accommodations', icon: Hotel, description: 'Where you\'ll stay' },
@@ -837,8 +855,16 @@ const TripDetails = () => {
                     <button
                       onClick={() => setIsEditingTrip(true)}
                       className="p-1 text-gray-300 hover:text-white transition-colors"
+                      title="Edit trip name"
                     >
                       <Edit3 className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={handleDeleteTrip}
+                      className="p-1 text-red-300 hover:text-red-200 transition-colors"
+                      title="Delete trip"
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
                 )}
@@ -961,11 +987,24 @@ const TripDetails = () => {
 
                         <div>
                           <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                            Travel Mode
+                            Travel Mode{Array.isArray(tripData.travel_mode) && tripData.travel_mode.length > 1 ? 's' : ''}
                           </h3>
-                          <div className="flex items-center space-x-2 text-lg text-gray-900">
-                            {getTravelIcon(tripData.travel_mode)}
-                            <span className="capitalize">{tripData.travel_mode || 'Not specified'}</span>
+                          <div className="flex items-center flex-wrap gap-2 text-lg text-gray-900">
+                            {Array.isArray(tripData.travel_mode) && tripData.travel_mode.length > 0 ? (
+                              tripData.travel_mode.map((mode, idx) => (
+                                <div key={idx} className="flex items-center space-x-1">
+                                  {getTravelIcon(mode)}
+                                  <span className="capitalize text-sm">{mode}</span>
+                                </div>
+                              ))
+                            ) : tripData.travel_mode ? (
+                              <>
+                                {getTravelIcon(tripData.travel_mode)}
+                                <span className="capitalize">{tripData.travel_mode}</span>
+                              </>
+                            ) : (
+                              <span>Not specified</span>
+                            )}
                           </div>
                         </div>
 
@@ -1005,6 +1044,19 @@ const TripDetails = () => {
                     </>
                   ) : (
                     <div className="space-y-6">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Trip Name
+                        </label>
+                        <input
+                          type="text"
+                          value={editedTrip.name || ''}
+                          onChange={(e) => setEditedTrip(prev => ({ ...prev, name: e.target.value }))}
+                          className="input-field"
+                          placeholder="Enter trip name"
+                        />
+                      </div>
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -1024,27 +1076,63 @@ const TripDetails = () => {
                           <input
                             type="date"
                             value={editedTrip.end_date || ''}
+                            min={editedTrip.start_date || ''}
                             onChange={(e) => setEditedTrip(prev => ({ ...prev, end_date: e.target.value }))}
                             className="input-field"
                           />
+                          {editedTrip.start_date && editedTrip.end_date && editedTrip.end_date < editedTrip.start_date && (
+                            <p className="text-red-600 text-xs mt-1">End date must be after start date</p>
+                          )}
                         </div>
                       </div>
 
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Travel Mode
+                          Travel Modes (select all that apply)
                         </label>
-                        <select
-                          value={editedTrip.travel_mode || ''}
-                          onChange={(e) => setEditedTrip(prev => ({ ...prev, travel_mode: e.target.value }))}
-                          className="input-field"
-                        >
-                          <option value="">Select travel mode</option>
-                          <option value="flight">Flight</option>
-                          <option value="car">Car</option>
-                          <option value="train">Train</option>
-                          <option value="bus">Bus</option>
-                        </select>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {[
+                            { value: 'flight', label: 'Flight', icon: '✈️' },
+                            { value: 'car', label: 'Car', icon: '🚗' },
+                            { value: 'train', label: 'Train', icon: '🚆' },
+                            { value: 'bus', label: 'Bus', icon: '🚌' }
+                          ].map(mode => {
+                            const travelModes = Array.isArray(editedTrip.travel_mode)
+                              ? editedTrip.travel_mode
+                              : (editedTrip.travel_mode ? [editedTrip.travel_mode] : []);
+                            const isSelected = travelModes.includes(mode.value);
+
+                            return (
+                              <label
+                                key={mode.value}
+                                className={`flex items-center space-x-2 px-3 py-2 border-2 rounded-lg cursor-pointer transition-all ${
+                                  isSelected
+                                    ? 'border-primary-600 bg-primary-50'
+                                    : 'border-gray-300 hover:border-gray-400'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    const currentModes = Array.isArray(editedTrip.travel_mode)
+                                      ? editedTrip.travel_mode
+                                      : (editedTrip.travel_mode ? [editedTrip.travel_mode] : []);
+
+                                    const newModes = e.target.checked
+                                      ? [...currentModes, mode.value]
+                                      : currentModes.filter(m => m !== mode.value);
+
+                                    setEditedTrip(prev => ({ ...prev, travel_mode: newModes }));
+                                  }}
+                                  className="h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+                                />
+                                <span className="text-lg">{mode.icon}</span>
+                                <span className="text-sm font-medium">{mode.label}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
                       </div>
 
                       <div>
@@ -1062,15 +1150,152 @@ const TripDetails = () => {
 
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Tags (comma-separated)
+                          Tags
                         </label>
-                        <input
-                          type="text"
-                          value={editedTrip.tags || ''}
-                          onChange={(e) => setEditedTrip(prev => ({ ...prev, tags: e.target.value }))}
-                          className="input-field"
-                          placeholder="e.g., romantic, adventure, cultural"
+                        <div className="space-y-2">
+                          {/* Tag input */}
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="text"
+                              value={editedTrip.tagInput || ''}
+                              onChange={(e) => setEditedTrip(prev => ({ ...prev, tagInput: e.target.value }))}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && editedTrip.tagInput?.trim()) {
+                                  e.preventDefault();
+                                  const currentTags = typeof editedTrip.tags === 'string'
+                                    ? editedTrip.tags.split(',').map(t => t.trim()).filter(t => t)
+                                    : (Array.isArray(editedTrip.tags) ? editedTrip.tags : []);
+
+                                  const newTag = editedTrip.tagInput.trim();
+                                  if (!currentTags.includes(newTag)) {
+                                    setEditedTrip(prev => ({
+                                      ...prev,
+                                      tags: [...currentTags, newTag].join(', '),
+                                      tagInput: ''
+                                    }));
+                                  } else {
+                                    setEditedTrip(prev => ({ ...prev, tagInput: '' }));
+                                  }
+                                }
+                              }}
+                              className="input-field flex-1"
+                              placeholder="Type a tag and press Enter (e.g., romantic, adventure, cultural)"
+                            />
+                          </div>
+                          {/* Tag chips */}
+                          {(() => {
+                            const tags = typeof editedTrip.tags === 'string'
+                              ? editedTrip.tags.split(',').map(t => t.trim()).filter(t => t)
+                              : (Array.isArray(editedTrip.tags) ? editedTrip.tags : []);
+
+                            return tags.length > 0 && (
+                              <div className="flex flex-wrap gap-2">
+                                {tags.map((tag, index) => (
+                                  <span
+                                    key={index}
+                                    className="inline-flex items-center px-3 py-1 bg-accent-100 text-accent-700 text-sm rounded-full font-medium"
+                                  >
+                                    #{tag}
+                                    <button
+                                      onClick={() => {
+                                        const newTags = tags.filter((_, i) => i !== index);
+                                        setEditedTrip(prev => ({ ...prev, tags: newTags.join(', ') }));
+                                      }}
+                                      className="ml-2 text-accent-500 hover:text-accent-700"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeSection === 'map' && (
+              <div className="card">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h2 className="text-xl font-bold text-gray-900 font-display">Map View</h2>
+                  <p className="text-sm text-gray-600 mt-1">Visualize all your trip destinations on an interactive map</p>
+                </div>
+                <div className="p-6">
+                  {process.env.REACT_APP_MAPBOX_TOKEN && process.env.REACT_APP_MAPBOX_TOKEN !== 'your_mapbox_token_here' ? (
+                    <div className="space-y-4">
+                      {/* Map Container */}
+                      <div className="bg-gray-100 rounded-lg overflow-hidden" style={{ height: '600px', position: 'relative' }}>
+                        <MapPickerModal
+                          isOpen={true}
+                          onClose={() => {}}
+                          onLocationSelect={(location) => console.log('Selected:', location)}
+                          initialCenter={
+                            tripHops.length > 0 && tripHops[0].latitude && tripHops[0].longitude
+                              ? { lng: tripHops[0].longitude, lat: tripHops[0].latitude }
+                              : { lng: 0, lat: 20 }
+                          }
                         />
+                      </div>
+
+                      {/* Destinations List */}
+                      {tripHops.length > 0 && (
+                        <div className="mt-6">
+                          <h3 className="text-lg font-semibold text-gray-900 mb-4">Trip Destinations</h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {tripHops.map((hop, index) => (
+                              <div
+                                key={hop.id}
+                                className="bg-white border-2 border-gray-200 rounded-lg p-4 hover:border-primary-500 transition-colors"
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <div className="flex items-center space-x-2 mb-2">
+                                      <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary-600 text-white text-xs font-bold">
+                                        {index + 1}
+                                      </span>
+                                      <h4 className="font-semibold text-gray-900">{hop.name}</h4>
+                                    </div>
+                                    <div className="text-sm text-gray-600 space-y-1">
+                                      <div className="flex items-center space-x-1">
+                                        <MapPin className="h-3 w-3" />
+                                        <span>{hop.city}, {hop.country}</span>
+                                      </div>
+                                      {hop.start_date && hop.end_date && (
+                                        <div className="flex items-center space-x-1">
+                                          <Calendar className="h-3 w-3" />
+                                          <span>{formatDate(hop.start_date)} - {formatDate(hop.end_date)}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 bg-gray-50 rounded-lg">
+                      <Map className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Map View Not Available</h3>
+                      <p className="text-gray-600 mb-4">
+                        To use the map feature, you need to configure your Mapbox API token.
+                      </p>
+                      <div className="max-w-2xl mx-auto text-left bg-white p-4 rounded border border-gray-300">
+                        <p className="text-sm text-gray-700 mb-2">
+                          <strong>Setup Instructions:</strong>
+                        </p>
+                        <ol className="text-sm text-gray-600 space-y-1 ml-4 list-decimal">
+                          <li>Get a free Mapbox token from <a href="https://account.mapbox.com/" target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline">https://account.mapbox.com/</a></li>
+                          <li>Create a <code className="bg-gray-100 px-1 rounded">.env</code> file in the project root</li>
+                          <li>Add: <code className="bg-gray-100 px-1 rounded">REACT_APP_MAPBOX_TOKEN=your_token_here</code></li>
+                          <li>Restart the development server</li>
+                        </ol>
                       </div>
                     </div>
                   )}
@@ -2478,9 +2703,13 @@ const TripDetails = () => {
                         <input
                           type="date"
                           value={newStayData.check_out}
+                          min={newStayData.check_in || ''}
                           onChange={(e) => setNewStayData(prev => ({ ...prev, check_out: e.target.value }))}
                           className="input-field"
                         />
+                        {newStayData.check_in && newStayData.check_out && newStayData.check_out < newStayData.check_in && (
+                          <p className="text-red-600 text-xs mt-1">Check-out must be after check-in</p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Cost</label>
