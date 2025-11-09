@@ -30,6 +30,8 @@ const MapPickerModal = ({
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [error, setError] = useState(null);
+  const [mapLoading, setMapLoading] = useState(true);
+  const [mapError, setMapError] = useState(null);
 
   // Handle location selection with reverse geocoding
   const handleLocationSelect = useCallback(async (lng, lat) => {
@@ -57,6 +59,17 @@ const MapPickerModal = ({
   useEffect(() => {
     if (!isOpen || !mapContainer.current) return;
 
+    // Check if Mapbox token is available
+    if (!MAPBOX_TOKEN || MAPBOX_TOKEN === 'your_mapbox_token_here') {
+      setMapError('Mapbox token is not configured. Please add REACT_APP_MAPBOX_TOKEN to your .env file.');
+      setMapLoading(false);
+      return;
+    }
+
+    // Reset states
+    setMapLoading(true);
+    setMapError(null);
+
     // Always initialize a fresh map when modal opens
     if (map.current) {
       map.current.remove();
@@ -64,38 +77,56 @@ const MapPickerModal = ({
       marker.current = null;
     }
 
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/streets-v12',
-      center: [initialCenter.lng, initialCenter.lat],
-      zoom: 2
-    });
+    try {
+      map.current = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: 'mapbox://styles/mapbox/streets-v12',
+        center: [initialCenter.lng, initialCenter.lat],
+        zoom: 2
+      });
 
-    // Add navigation controls
-    map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+      // Handle map load event
+      map.current.on('load', () => {
+        setMapLoading(false);
+      });
 
-    // Handle map clicks
-    map.current.on('click', async (e) => {
-      const { lng, lat } = e.lngLat;
+      // Handle map errors
+      map.current.on('error', (e) => {
+        console.error('Map error:', e);
+        setMapError('Failed to load map. Please check your internet connection and Mapbox token.');
+        setMapLoading(false);
+      });
 
-      // Add or update marker
-      if (marker.current) {
-        marker.current.setLngLat([lng, lat]);
-      } else {
-        marker.current = new mapboxgl.Marker({ color: '#4f46e5', draggable: true })
-          .setLngLat([lng, lat])
-          .addTo(map.current);
+      // Add navigation controls
+      map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-        // Handle marker drag
-        marker.current.on('dragend', async () => {
-          const lngLat = marker.current.getLngLat();
-          await handleLocationSelect(lngLat.lng, lngLat.lat);
-        });
-      }
+      // Handle map clicks
+      map.current.on('click', async (e) => {
+        const { lng, lat } = e.lngLat;
 
-      // Reverse geocode the location
-      await handleLocationSelect(lng, lat);
-    });
+        // Add or update marker
+        if (marker.current) {
+          marker.current.setLngLat([lng, lat]);
+        } else {
+          marker.current = new mapboxgl.Marker({ color: '#4f46e5', draggable: true })
+            .setLngLat([lng, lat])
+            .addTo(map.current);
+
+          // Handle marker drag
+          marker.current.on('dragend', async () => {
+            const lngLat = marker.current.getLngLat();
+            await handleLocationSelect(lngLat.lng, lngLat.lat);
+          });
+        }
+
+        // Reverse geocode the location
+        await handleLocationSelect(lng, lat);
+      });
+    } catch (err) {
+      console.error('Error initializing map:', err);
+      setMapError('Failed to initialize map. Please try again.');
+      setMapLoading(false);
+    }
 
     // Cleanup when modal closes
     return () => {
@@ -159,16 +190,47 @@ const MapPickerModal = ({
           <div className="flex-1 relative" style={{ minHeight: '500px' }}>
             <div ref={mapContainer} className="absolute inset-0" />
 
-            {/* Instructions Overlay */}
-            <div className="absolute top-4 left-4 bg-white px-4 py-2 rounded-lg shadow-md z-10">
-              <p className="text-sm text-gray-700">
-                Click anywhere on the map to select a location
-              </p>
-            </div>
+            {/* Map Loading Indicator */}
+            {mapLoading && !mapError && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-100 z-10">
+                <div className="text-center">
+                  <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto mb-3" />
+                  <p className="text-sm text-gray-700">Loading map...</p>
+                </div>
+              </div>
+            )}
 
-            {/* Loading Indicator */}
+            {/* Map Error */}
+            {mapError && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-100 z-10">
+                <div className="text-center max-w-md px-6">
+                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <MapPin className="w-8 h-8 text-red-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Map Load Error</h3>
+                  <p className="text-sm text-gray-600 mb-4">{mapError}</p>
+                  <button
+                    onClick={handleClose}
+                    className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Instructions Overlay */}
+            {!mapLoading && !mapError && (
+              <div className="absolute top-4 left-4 bg-white px-4 py-2 rounded-lg shadow-md z-10">
+                <p className="text-sm text-gray-700">
+                  Click anywhere on the map to select a location
+                </p>
+              </div>
+            )}
+
+            {/* Geocoding Loading Indicator */}
             {isGeocoding && (
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white px-6 py-4 rounded-lg shadow-lg z-10 flex items-center gap-3">
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white px-6 py-4 rounded-lg shadow-lg z-20 flex items-center gap-3">
                 <Loader2 className="w-5 h-5 text-indigo-600 animate-spin" />
                 <span className="text-sm text-gray-700">Finding address...</span>
               </div>
