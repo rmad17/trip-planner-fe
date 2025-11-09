@@ -1,19 +1,22 @@
-import React from 'react';
-import { 
-  MapPin, 
-  Calendar, 
-  Clock, 
-  Users, 
-  DollarSign, 
-  Plane, 
-  Car, 
-  Train, 
+import React, { useState } from 'react';
+import {
+  MapPin,
+  Calendar,
+  Clock,
+  Users,
+  DollarSign,
+  Plane,
+  Car,
+  Train,
   Bus,
   ArrowRight,
-  MoreVertical
+  MoreVertical,
+  Trash2
 } from 'lucide-react';
 
-const TripCard = ({ trip, onSelect }) => {
+const TripCard = ({ trip, onSelect, onDelete }) => {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const getTravelIcon = (travelMode) => {
     const iconClass = "h-4 w-4";
     switch (travelMode) {
@@ -50,6 +53,30 @@ const TripCard = ({ trip, onSelect }) => {
     }
   };
 
+  const handleDelete = async (e) => {
+    e.stopPropagation(); // Prevent card click
+    if (!showDeleteConfirm) {
+      setShowDeleteConfirm(true);
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      if (onDelete) {
+        await onDelete(trip.id);
+      }
+    } catch (error) {
+      console.error('Error deleting trip:', error);
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
+  const cancelDelete = (e) => {
+    e.stopPropagation(); // Prevent card click
+    setShowDeleteConfirm(false);
+  };
+
   return (
     <div className="card-hover cursor-pointer group" onClick={() => onSelect(trip)}>
       {/* Header Image */}
@@ -66,10 +93,44 @@ const TripCard = ({ trip, onSelect }) => {
               {trip.status || 'Planning'}
             </div>
           </div>
-          <button className="p-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-full text-white transition-colors">
-            <MoreVertical className="h-4 w-4" />
-          </button>
+          {onDelete && !showDeleteConfirm && (
+            <button
+              onClick={handleDelete}
+              className="p-2 bg-red-500 bg-opacity-80 hover:bg-opacity-100 rounded-full text-white transition-colors opacity-0 group-hover:opacity-100"
+              title="Delete trip"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
         </div>
+
+        {/* Delete Confirmation Overlay */}
+        {showDeleteConfirm && (
+          <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-10">
+            <div className="bg-white rounded-lg p-6 max-w-sm mx-4">
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Trip?</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Are you sure you want to delete "{trip.name}"? This action cannot be undone.
+              </p>
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete'}
+                </button>
+                <button
+                  onClick={cancelDelete}
+                  disabled={isDeleting}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Bottom Title */}
         <div className="absolute bottom-4 left-4 right-4 text-white">
