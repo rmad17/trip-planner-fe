@@ -34,6 +34,7 @@ const MapPickerModal = ({
   const minimap = useRef(null);
   const marker = useRef(null);
   const markers = useRef([]); // For viewOnly mode with multiple locations
+  const handleLocationSelectRef = useRef(null);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [error, setError] = useState(null);
@@ -62,9 +63,17 @@ const MapPickerModal = ({
     }
   }, [provider]);
 
+  // Keep ref updated with latest callback
+  handleLocationSelectRef.current = handleLocationSelect;
+
   // Initialize map
   useEffect(() => {
-    if (!isOpen || !mapContainer.current) return;
+    if (!isOpen || !mapContainer.current) {
+      console.log('Map init skipped:', { isOpen, hasContainer: !!mapContainer.current });
+      return;
+    }
+
+    console.log('Initializing map...');
 
     // Check if Mapbox token is available
     if (!MAPBOX_TOKEN || MAPBOX_TOKEN === 'your_mapbox_token_here') {
@@ -85,16 +94,29 @@ const MapPickerModal = ({
     }
 
     try {
+      console.log('Creating Mapbox map instance...');
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
         style: 'mapbox://styles/mapbox/streets-v12',
         center: [initialCenter.lng, initialCenter.lat],
-        zoom: 2
+        zoom: viewOnly ? 2 : 4
       });
+
+      console.log('Map instance created, waiting for load...');
 
       // Handle map load event
       map.current.on('load', () => {
+        console.log('Map loaded successfully!');
         setMapLoading(false);
+        // Resize map to ensure it fits the container properly
+        if (map.current) {
+          setTimeout(() => {
+            if (map.current) {
+              console.log('Resizing map...');
+              map.current.resize();
+            }
+          }, 100);
+        }
       });
 
       // Handle map errors
@@ -107,8 +129,8 @@ const MapPickerModal = ({
       // Add navigation controls
       map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-      // Initialize minimap
-      if (minimapContainer.current) {
+      // Initialize minimap (only in viewOnly mode)
+      if (viewOnly && minimapContainer.current) {
         minimap.current = new mapboxgl.Map({
           container: minimapContainer.current,
           style: 'mapbox://styles/mapbox/satellite-streets-v12',
@@ -253,12 +275,16 @@ const MapPickerModal = ({
             // Handle marker drag
             marker.current.on('dragend', async () => {
               const lngLat = marker.current.getLngLat();
-              await handleLocationSelect(lngLat.lng, lngLat.lat);
+              if (handleLocationSelectRef.current) {
+                await handleLocationSelectRef.current(lngLat.lng, lngLat.lat);
+              }
             });
           }
 
           // Reverse geocode the location
-          await handleLocationSelect(lng, lat);
+          if (handleLocationSelectRef.current) {
+            await handleLocationSelectRef.current(lng, lat);
+          }
         });
       }
     } catch (err) {
@@ -283,7 +309,8 @@ const MapPickerModal = ({
         marker.current = null;
       }
     };
-  }, [isOpen, handleLocationSelect, initialCenter.lng, initialCenter.lat, viewOnly, locations]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialCenter.lng, initialCenter.lat, viewOnly]);
 
   // Confirm selection
   const handleConfirm = () => {
@@ -356,7 +383,8 @@ const MapPickerModal = ({
 
       {/* Modal */}
       <div className="flex items-center justify-center min-h-screen p-4">
-        <div className="relative bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div className="relative bg-white rounded-lg shadow-xl w-full max-w-4xl" style={{ height: '90vh', maxHeight: '90vh' }}>
+          <div className="flex flex-col h-full">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-200">
             <div className="flex items-center gap-2">
@@ -374,15 +402,8 @@ const MapPickerModal = ({
           </div>
 
           {/* Map Container */}
-          <div className="flex-1 relative" style={{ minHeight: '500px' }}>
-            <div ref={mapContainer} className="absolute inset-0" />
-
-            {/* Minimap */}
-            <div
-              ref={minimapContainer}
-              className="absolute bottom-4 right-4 w-48 h-32 rounded-lg shadow-lg border-2 border-white overflow-hidden z-10"
-              style={{ pointerEvents: 'none' }}
-            />
+          <div className="flex-1 relative" style={{ minHeight: '500px', width: '100%' }}>
+            <div ref={mapContainer} className="absolute inset-0" style={{ width: '100%', height: '100%' }} />
 
             {/* Map Loading Indicator */}
             {mapLoading && !mapError && (
@@ -477,6 +498,7 @@ const MapPickerModal = ({
               </p>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>
