@@ -13,7 +13,8 @@ const PlaceSearchInput = ({
   className = "",
   onPlaceSelect,
   showMapPicker = true,
-  provider = null // Can be overridden for specific trips
+  provider = null, // Can be overridden for specific trips
+  initialMapCenter = null // Initial center for the map picker
 }) => {
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const mapProvider = provider || getMapProvider();
@@ -124,6 +125,7 @@ const PlaceSearchInput = ({
           onClose={() => setIsMapModalOpen(false)}
           onLocationSelect={handleMapSelection}
           provider={mapProvider}
+          initialCenter={initialMapCenter || { lng: 0, lat: 20 }}
         />
       )}
     </>

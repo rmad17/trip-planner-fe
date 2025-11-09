@@ -26,7 +26,8 @@ const MapPickerModal = ({
   initialCenter = { lng: 0, lat: 20 },
   provider = 'mapbox',
   viewOnly = false,
-  locations = []
+  locations = [],
+  focusLocation = null
 }) => {
   const mapContainer = useRef(null);
   const minimapContainer = useRef(null);
@@ -73,6 +74,12 @@ const MapPickerModal = ({
       return;
     }
 
+    // Prevent duplicate initialization - if map already exists and is for the same container, skip
+    if (map.current && map.current.getContainer() === mapContainer.current) {
+      console.log('Map already initialized for this container, skipping...');
+      return;
+    }
+
     console.log('Initializing map...');
 
     // Check if Mapbox token is available
@@ -86,8 +93,9 @@ const MapPickerModal = ({
     setMapLoading(true);
     setMapError(null);
 
-    // Always initialize a fresh map when modal opens
+    // Clean up existing map if it exists
     if (map.current) {
+      console.log('Removing existing map...');
       map.current.remove();
       map.current = null;
       marker.current = null;
@@ -128,6 +136,35 @@ const MapPickerModal = ({
 
       // Add navigation controls
       map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+      // Handle map clicks for location selection (only when not in viewOnly mode)
+      if (!viewOnly) {
+        map.current.on('click', async (e) => {
+          const { lng, lat } = e.lngLat;
+
+          // Add or update marker
+          if (marker.current) {
+            marker.current.setLngLat([lng, lat]);
+          } else {
+            marker.current = new mapboxgl.Marker({ color: '#4f46e5', draggable: true })
+              .setLngLat([lng, lat])
+              .addTo(map.current);
+
+            // Handle marker drag
+            marker.current.on('dragend', async () => {
+              const lngLat = marker.current.getLngLat();
+              if (handleLocationSelectRef.current) {
+                await handleLocationSelectRef.current(lngLat.lng, lngLat.lat);
+              }
+            });
+          }
+
+          // Reverse geocode the location
+          if (handleLocationSelectRef.current) {
+            await handleLocationSelectRef.current(lng, lat);
+          }
+        });
+      }
 
       // Initialize minimap (only in viewOnly mode)
       if (viewOnly && minimapContainer.current) {
@@ -214,79 +251,6 @@ const MapPickerModal = ({
         map.current.on('move', updateViewportBox);
         map.current.on('zoom', updateViewportBox);
       }
-
-      // In viewOnly mode, add markers for all locations
-      if (viewOnly && locations.length > 0) {
-        // Clear existing markers
-        markers.current.forEach(m => m.remove());
-        markers.current = [];
-
-        // Add markers for each location
-        locations.forEach((location, index) => {
-          if (location.latitude && location.longitude) {
-            const marker = new mapboxgl.Marker({ color: '#4f46e5' })
-              .setLngLat([location.longitude, location.latitude])
-              .addTo(map.current);
-
-            // Add popup with location info
-            if (location.name || location.city) {
-              const popup = new mapboxgl.Popup({ offset: 25 })
-                .setHTML(`
-                  <div style="padding: 4px;">
-                    <strong>${location.name || location.city || 'Location'}</strong>
-                    ${location.city && location.name ? `<br/>${location.city}` : ''}
-                    ${location.country ? `<br/>${location.country}` : ''}
-                  </div>
-                `);
-              marker.setPopup(popup);
-            }
-
-            markers.current.push(marker);
-          }
-        });
-
-        // Fit map bounds to show all markers
-        if (locations.length > 0) {
-          const bounds = new mapboxgl.LngLatBounds();
-          locations.forEach(location => {
-            if (location.latitude && location.longitude) {
-              bounds.extend([location.longitude, location.latitude]);
-            }
-          });
-
-          // Only fit bounds if we have valid locations
-          if (!bounds.isEmpty()) {
-            map.current.fitBounds(bounds, { padding: 50, maxZoom: 10 });
-          }
-        }
-      } else if (!viewOnly) {
-        // Handle map clicks for location selection (only when not in viewOnly mode)
-        map.current.on('click', async (e) => {
-          const { lng, lat } = e.lngLat;
-
-          // Add or update marker
-          if (marker.current) {
-            marker.current.setLngLat([lng, lat]);
-          } else {
-            marker.current = new mapboxgl.Marker({ color: '#4f46e5', draggable: true })
-              .setLngLat([lng, lat])
-              .addTo(map.current);
-
-            // Handle marker drag
-            marker.current.on('dragend', async () => {
-              const lngLat = marker.current.getLngLat();
-              if (handleLocationSelectRef.current) {
-                await handleLocationSelectRef.current(lngLat.lng, lngLat.lat);
-              }
-            });
-          }
-
-          // Reverse geocode the location
-          if (handleLocationSelectRef.current) {
-            await handleLocationSelectRef.current(lng, lat);
-          }
-        });
-      }
     } catch (err) {
       console.error('Error initializing map:', err);
       setMapError('Failed to initialize map. Please try again.');
@@ -311,6 +275,149 @@ const MapPickerModal = ({
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialCenter.lng, initialCenter.lat, viewOnly]);
+
+  // Update markers when locations change (viewOnly mode)
+  useEffect(() => {
+    if (!viewOnly || !map.current || mapLoading) return;
+
+    // Wait for map to be fully loaded
+    const updateMarkers = () => {
+      // Clear existing markers
+      markers.current.forEach(m => m.remove());
+      markers.current = [];
+
+      // Add markers for each location
+      locations.forEach((location) => {
+        if (location.latitude && location.longitude) {
+          const newMarker = new mapboxgl.Marker({ color: '#4f46e5' })
+            .setLngLat([location.longitude, location.latitude])
+            .addTo(map.current);
+
+          // Add popup with location info
+          if (location.name || location.city) {
+            const popup = new mapboxgl.Popup({ offset: 25 })
+              .setHTML(`
+                <div style="padding: 4px;">
+                  <strong>${location.name || location.city || 'Location'}</strong>
+                  ${location.city && location.name ? `<br/>${location.city}` : ''}
+                  ${location.country ? `<br/>${location.country}` : ''}
+                </div>
+              `);
+            newMarker.setPopup(popup);
+          }
+
+          markers.current.push(newMarker);
+        }
+      });
+    };
+
+    // If map is already loaded, update immediately
+    if (map.current.loaded()) {
+      updateMarkers();
+    } else {
+      // Otherwise wait for load event
+      map.current.once('load', updateMarkers);
+    }
+  }, [viewOnly, locations, mapLoading]);
+
+  // Initial zoom when map first loads (viewOnly mode)
+  useEffect(() => {
+    if (!viewOnly || !map.current || mapLoading || locations.length === 0) return;
+
+    const performInitialZoom = () => {
+      const validLocations = locations.filter(loc => loc.latitude && loc.longitude);
+      if (validLocations.length === 0) return;
+
+      // Calculate distance between locations (Haversine formula)
+      const calculateDistance = (lat1, lon1, lat2, lon2) => {
+        const R = 6371; // Radius of Earth in km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+      };
+
+      // Check if locations are far apart (> 1000km) or if there are more than 3
+      let showAllLocations = true;
+      if (validLocations.length > 3) {
+        showAllLocations = false;
+      } else if (validLocations.length > 1) {
+        // Calculate max distance between any two locations
+        let maxDistance = 0;
+        for (let i = 0; i < validLocations.length; i++) {
+          for (let j = i + 1; j < validLocations.length; j++) {
+            const distance = calculateDistance(
+              validLocations[i].latitude,
+              validLocations[i].longitude,
+              validLocations[j].latitude,
+              validLocations[j].longitude
+            );
+            maxDistance = Math.max(maxDistance, distance);
+          }
+        }
+        if (maxDistance > 1000) {
+          showAllLocations = false;
+        }
+      }
+
+      if (showAllLocations && validLocations.length > 1) {
+        // Show all locations
+        const bounds = new mapboxgl.LngLatBounds();
+        validLocations.forEach(location => {
+          bounds.extend([location.longitude, location.latitude]);
+        });
+        if (!bounds.isEmpty()) {
+          map.current.fitBounds(bounds, { padding: 80, maxZoom: 10 });
+        }
+      } else if (validLocations.length > 0) {
+        // Show only the first location
+        const firstLoc = validLocations[0];
+        map.current.flyTo({
+          center: [firstLoc.longitude, firstLoc.latitude],
+          zoom: 10,
+          essential: true
+        });
+      }
+    };
+
+    // Only perform initial zoom once when map first loads
+    if (map.current.loaded()) {
+      performInitialZoom();
+    } else {
+      map.current.once('load', performInitialZoom);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewOnly, mapLoading]); // Only run when map finishes loading, not when locations change
+
+  // Handle focus location changes (when user clicks on a destination)
+  useEffect(() => {
+    if (!focusLocation || !map.current) return;
+
+    // Only proceed if we have valid coordinates
+    if (!focusLocation.latitude || !focusLocation.longitude) return;
+
+    const focusOnLocation = () => {
+      if (map.current && map.current.loaded()) {
+        map.current.flyTo({
+          center: [focusLocation.longitude, focusLocation.latitude],
+          zoom: 12,
+          essential: true,
+          duration: 1000
+        });
+      }
+    };
+
+    // If map is loaded, focus immediately
+    if (map.current.loaded()) {
+      focusOnLocation();
+    } else {
+      // Otherwise wait for map to load
+      map.current.once('load', focusOnLocation);
+    }
+  }, [focusLocation]);
 
   // Confirm selection
   const handleConfirm = () => {

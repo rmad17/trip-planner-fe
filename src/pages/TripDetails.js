@@ -73,6 +73,7 @@ const TripDetails = () => {
   const [showAddForms, setShowAddForms] = useState({});
   const [itineraryViewMode, setItineraryViewMode] = useState('all'); // 'all' or 'day'
   const [selectedDay, setSelectedDay] = useState(null);
+  const [selectedMapHop, setSelectedMapHop] = useState(null); // For map view focus
   
   // Form states for hop management
   const [editingHop, setEditingHop] = useState(null);
@@ -850,7 +851,6 @@ const TripDetails = () => {
 
   const sections = [
     { id: 'overview', label: 'Overview', icon: MapPin, description: 'Trip summary & details' },
-    { id: 'map', label: 'Map View', icon: Map, description: 'Visualize your trip' },
     { id: 'destinations', label: 'Destinations', icon: Navigation, description: 'Trip hops/locations' },
     { id: 'days', label: 'Daily Plans', icon: Calendar, description: 'Day by day planning' },
     { id: 'activities', label: 'Activities', icon: Plus, description: 'Manage trip activities' },
@@ -1313,92 +1313,6 @@ const TripDetails = () => {
                             );
                           })()}
                         </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {activeSection === 'map' && (
-              <div className="card">
-                <div className="px-6 py-4 border-b border-gray-200">
-                  <h2 className="text-xl font-bold text-gray-900 font-display">Map View</h2>
-                  <p className="text-sm text-gray-600 mt-1">Visualize all your trip destinations on an interactive map</p>
-                </div>
-                <div className="p-6">
-                  {process.env.REACT_APP_MAPBOX_TOKEN && process.env.REACT_APP_MAPBOX_TOKEN !== 'your_mapbox_token_here' ? (
-                    <div className="space-y-4">
-                      {/* Map Container */}
-                      <div className="bg-gray-100 rounded-lg overflow-hidden" style={{ height: '600px', position: 'relative' }}>
-                        <MapPickerModal
-                          isOpen={true}
-                          onClose={() => {}}
-                          viewOnly={true}
-                          locations={tripHops}
-                          initialCenter={
-                            tripHops.length > 0 && tripHops[0].latitude && tripHops[0].longitude
-                              ? { lng: tripHops[0].longitude, lat: tripHops[0].latitude }
-                              : { lng: 0, lat: 20 }
-                          }
-                        />
-                      </div>
-
-                      {/* Destinations List */}
-                      {tripHops.length > 0 && (
-                        <div className="mt-6">
-                          <h3 className="text-lg font-semibold text-gray-900 mb-4">Trip Destinations</h3>
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {tripHops.map((hop, index) => (
-                              <div
-                                key={hop.id}
-                                className="bg-white border-2 border-gray-200 rounded-lg p-4 hover:border-primary-500 transition-colors"
-                              >
-                                <div className="flex items-start justify-between">
-                                  <div className="flex-1">
-                                    <div className="flex items-center space-x-2 mb-2">
-                                      <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary-600 text-white text-xs font-bold">
-                                        {index + 1}
-                                      </span>
-                                      <h4 className="font-semibold text-gray-900">{hop.name}</h4>
-                                    </div>
-                                    <div className="text-sm text-gray-600 space-y-1">
-                                      <div className="flex items-center space-x-1">
-                                        <MapPin className="h-3 w-3" />
-                                        <span>{hop.city}, {hop.country}</span>
-                                      </div>
-                                      {hop.start_date && hop.end_date && (
-                                        <div className="flex items-center space-x-1">
-                                          <Calendar className="h-3 w-3" />
-                                          <span>{formatDate(hop.start_date)} - {formatDate(hop.end_date)}</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-center py-12 bg-gray-50 rounded-lg">
-                      <Map className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Map View Not Available</h3>
-                      <p className="text-gray-600 mb-4">
-                        To use the map feature, you need to configure your Mapbox API token.
-                      </p>
-                      <div className="max-w-2xl mx-auto text-left bg-white p-4 rounded border border-gray-300">
-                        <p className="text-sm text-gray-700 mb-2">
-                          <strong>Setup Instructions:</strong>
-                        </p>
-                        <ol className="text-sm text-gray-600 space-y-1 ml-4 list-decimal">
-                          <li>Get a free Mapbox token from <a href="https://account.mapbox.com/" target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline">https://account.mapbox.com/</a></li>
-                          <li>Create a <code className="bg-gray-100 px-1 rounded">.env</code> file in the project root</li>
-                          <li>Add: <code className="bg-gray-100 px-1 rounded">REACT_APP_MAPBOX_TOKEN=your_token_here</code></li>
-                          <li>Restart the development server</li>
-                        </ol>
                       </div>
                     </div>
                   )}
