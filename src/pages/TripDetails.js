@@ -2751,7 +2751,6 @@ const TripDetails = () => {
               </div>
             )}
           </div>
-        </div>
       </div>
     </div>
   );
