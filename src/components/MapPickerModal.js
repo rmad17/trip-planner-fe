@@ -57,44 +57,48 @@ const MapPickerModal = ({
   useEffect(() => {
     if (!isOpen || !mapContainer.current) return;
 
-    // Only initialize if map doesn't exist
-    if (!map.current) {
-      map.current = new mapboxgl.Map({
-        container: mapContainer.current,
-        style: 'mapbox://styles/mapbox/streets-v12',
-        center: [initialCenter.lng, initialCenter.lat],
-        zoom: 2
-      });
-
-      // Add navigation controls
-      map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
-
-      // Handle map clicks
-      map.current.on('click', async (e) => {
-        const { lng, lat } = e.lngLat;
-
-        // Add or update marker
-        if (marker.current) {
-          marker.current.setLngLat([lng, lat]);
-        } else {
-          marker.current = new mapboxgl.Marker({ color: '#4f46e5', draggable: true })
-            .setLngLat([lng, lat])
-            .addTo(map.current);
-
-          // Handle marker drag
-          marker.current.on('dragend', async () => {
-            const lngLat = marker.current.getLngLat();
-            await handleLocationSelect(lngLat.lng, lngLat.lat);
-          });
-        }
-
-        // Reverse geocode the location
-        await handleLocationSelect(lng, lat);
-      });
+    // Always initialize a fresh map when modal opens
+    if (map.current) {
+      map.current.remove();
+      map.current = null;
+      marker.current = null;
     }
 
+    map.current = new mapboxgl.Map({
+      container: mapContainer.current,
+      style: 'mapbox://styles/mapbox/streets-v12',
+      center: [initialCenter.lng, initialCenter.lat],
+      zoom: 2
+    });
+
+    // Add navigation controls
+    map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+    // Handle map clicks
+    map.current.on('click', async (e) => {
+      const { lng, lat } = e.lngLat;
+
+      // Add or update marker
+      if (marker.current) {
+        marker.current.setLngLat([lng, lat]);
+      } else {
+        marker.current = new mapboxgl.Marker({ color: '#4f46e5', draggable: true })
+          .setLngLat([lng, lat])
+          .addTo(map.current);
+
+        // Handle marker drag
+        marker.current.on('dragend', async () => {
+          const lngLat = marker.current.getLngLat();
+          await handleLocationSelect(lngLat.lng, lngLat.lat);
+        });
+      }
+
+      // Reverse geocode the location
+      await handleLocationSelect(lng, lat);
+    });
+
+    // Cleanup when modal closes
     return () => {
-      // Cleanup on unmount
       if (map.current) {
         map.current.remove();
         map.current = null;

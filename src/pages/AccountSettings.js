@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, User, Mail, Lock, Image } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserDisplayName } from '../utils/userUtils';
+import ProfileButton from '../components/ProfileButton';
 
 const AccountSettings = () => {
   const navigate = useNavigate();
@@ -14,17 +15,20 @@ const AccountSettings = () => {
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5 text-gray-600" />
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Account Settings</h1>
-              <p className="text-sm text-gray-500">Manage your personal information and preferences</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <ArrowLeft className="w-5 h-5 text-gray-600" />
+              </button>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Account Settings</h1>
+                <p className="text-sm text-gray-500">Manage your personal information and preferences</p>
+              </div>
             </div>
+            <ProfileButton />
           </div>
         </div>
       </div>
