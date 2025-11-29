@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import PlaceSearchInput from '../components/PlaceSearchInput';
 import ProfileButton from '../components/ProfileButton';
 import MapPickerModal from '../components/MapPickerModal';
+import { CURRENCIES, DEFAULT_CURRENCY, getCurrencySymbol } from '../utils/currency';
 import {
   tripAPI,
   tripHopAPI,
@@ -119,7 +120,7 @@ const TripDetails = () => {
     description: '',
     category: 'food',
     amount: '',
-    currency: 'USD',
+    currency: DEFAULT_CURRENCY,
     date: new Date().toISOString().split('T')[0],
     location: '',
     payment_method: 'card',
@@ -573,12 +574,12 @@ const TripDetails = () => {
         location: newActivityData.location,
         activity_type: newActivityData.activity_type,
         notes: newActivityData.notes,
-        trip_day_id: newActivityData.day_id, // Maps day_id from form to trip_day_id for backend
+        trip_day: newActivityData.day_id, // Backend expects 'trip_day' field
         estimated_cost: newActivityData.estimated_cost ? parseFloat(newActivityData.estimated_cost) : null,
         start_time: newActivityData.start_time ? new Date(`1970-01-01T${newActivityData.start_time}:00`).toISOString() : null,
         end_time: newActivityData.end_time ? new Date(`1970-01-01T${newActivityData.end_time}:00`).toISOString() : null,
       };
-      
+
       await activityAPI.createActivity(tripId, activityData);
       
       // Reset form and close
@@ -795,15 +796,20 @@ const TripDetails = () => {
     });
   };
 
-  const formatCurrency = (amount) => {
+  const formatCurrency = (amount, currencyCode = null) => {
     // Handle null, undefined, NaN, and invalid values
     if (amount === null || amount === undefined || isNaN(amount)) {
-      return '$0.00';
+      const symbol = getCurrencySymbol(currencyCode || trip?.currency || DEFAULT_CURRENCY);
+      return `${symbol}0.00`;
     }
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
+    const currency = currencyCode || trip?.currency || DEFAULT_CURRENCY;
+    const symbol = getCurrencySymbol(currency);
+    const formattedAmount = new Intl.NumberFormat('en-IN', {
+      style: 'decimal',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(amount);
+    return `${symbol}${formattedAmount}`;
   };
 
   // Helper function to parse place data for destinations
@@ -959,40 +965,42 @@ const TripDetails = () => {
         </div>
       </header>
 
-      {/* Tab Navigation */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex overflow-x-auto scrollbar-hide">
-            {sections.map((section) => {
-              const IconComponent = section.icon;
-              return (
-                <button
-                  key={section.id}
-                  onClick={() => setActiveSection(section.id)}
-                  className={`flex-shrink-0 flex items-center space-x-2 px-6 py-4 border-b-2 transition-all ${
-                    activeSection === section.id
-                      ? 'border-primary-600 text-primary-600'
-                      : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
-                  }`}
-                >
-                  <IconComponent className="h-5 w-5" />
-                  <div className="text-left hidden sm:block">
-                    <div className="font-medium">{section.label}</div>
-                    <div className="text-xs text-gray-500">{section.description}</div>
-                  </div>
-                  <div className="text-left sm:hidden">
-                    <div className="font-medium text-sm">{section.label}</div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
+      {/* Main Content with Vertical Tabs */}
       <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-        <div className="space-y-6">
+        <div className="flex gap-6">
+          {/* Vertical Tab Navigation */}
+          <div className="w-64 flex-shrink-0">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 sticky top-24 overflow-hidden">
+              <div className="p-4 border-b border-gray-200">
+                <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">Sections</h3>
+              </div>
+              <nav className="p-2">
+                {sections.map((section) => {
+                  const IconComponent = section.icon;
+                  return (
+                    <button
+                      key={section.id}
+                      onClick={() => setActiveSection(section.id)}
+                      className={`w-full flex items-start space-x-3 px-4 py-3 rounded-lg transition-all mb-1 ${
+                        activeSection === section.id
+                          ? 'bg-primary-50 text-primary-700 border-l-4 border-primary-600'
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-l-4 border-transparent'
+                      }`}
+                    >
+                      <IconComponent className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                      <div className="text-left flex-1">
+                        <div className="font-medium text-sm">{section.label}</div>
+                        <div className="text-xs text-gray-500 mt-0.5">{section.description}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+          </div>
+
+          {/* Content Area */}
+          <div className="flex-1 space-y-6">
             {activeSection === 'overview' && (
               <div className="card">
                 <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
@@ -1234,6 +1242,38 @@ const TripDetails = () => {
                               </label>
                             );
                           })}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Budget
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={editedTrip.budget || ''}
+                            onChange={(e) => setEditedTrip(prev => ({ ...prev, budget: e.target.value }))}
+                            className="input-field"
+                            placeholder="Enter budget amount"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Currency
+                          </label>
+                          <select
+                            value={editedTrip.currency || DEFAULT_CURRENCY}
+                            onChange={(e) => setEditedTrip(prev => ({ ...prev, currency: e.target.value }))}
+                            className="input-field"
+                          >
+                            {CURRENCIES.map(curr => (
+                              <option key={curr.code} value={curr.code}>
+                                {curr.symbol} - {curr.name}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </div>
 
@@ -1751,6 +1791,7 @@ const TripDetails = () => {
                             // Edit Form
                             <div className="space-y-3">
                               <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
                                 <input
                                   type="text"
                                   value={editingHop.name || ''}
@@ -1759,6 +1800,7 @@ const TripDetails = () => {
                                 />
                               </div>
                               <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
                                 <PlaceSearchInput
                                   value={editingHop.city || ''}
                                   onChange={(value) => {
@@ -1780,13 +1822,47 @@ const TripDetails = () => {
                                   placeholder="City, Country"
                                 />
                               </div>
-                              <textarea
-                                value={editingHop.description || ''}
-                                onChange={(e) => setEditingHop(prev => ({ ...prev, description: e.target.value }))}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                                rows="2"
-                                placeholder="Description"
-                              />
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                                  <input
+                                    type="date"
+                                    value={editingHop.start_date ? new Date(editingHop.start_date).toISOString().split('T')[0] : ''}
+                                    onChange={(e) => setEditingHop(prev => ({ ...prev, start_date: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                                  <input
+                                    type="date"
+                                    value={editingHop.end_date ? new Date(editingHop.end_date).toISOString().split('T')[0] : ''}
+                                    onChange={(e) => setEditingHop(prev => ({ ...prev, end_date: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                  />
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Budget</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={editingHop.estimated_budget || ''}
+                                  onChange={(e) => setEditingHop(prev => ({ ...prev, estimated_budget: e.target.value }))}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                  placeholder="Estimated budget"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                                <textarea
+                                  value={editingHop.description || ''}
+                                  onChange={(e) => setEditingHop(prev => ({ ...prev, description: e.target.value }))}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                  rows="2"
+                                  placeholder="Description"
+                                />
+                              </div>
                               <div className="flex justify-end space-x-2">
                                 <button
                                   onClick={() => setEditingHop(null)}
@@ -2777,8 +2853,9 @@ const TripDetails = () => {
                               return acc;
                             }, {});
 
-                            return Object.values(groupedByDay).map((groupedDay) => (
-                              <div key={groupedDay.day_number} className="border border-gray-200 rounded-lg">
+                            return Object.values(groupedByDay).map((groupedDay, index, array) => (
+                              <div key={groupedDay.day_number}>
+                                <div className="border border-gray-200 rounded-lg">
                                 <div className="p-4 bg-gray-50 border-b border-gray-200">
                                   <div className="flex justify-between items-center">
                                     <div className="flex items-center space-x-3">
@@ -2887,6 +2964,18 @@ const TripDetails = () => {
                                     </div>
                                   )}
                                 </div>
+                              </div>
+                              {index < array.length - 1 && (
+                                <div className="flex items-center justify-center my-6">
+                                  <div className="flex-1 border-t-2 border-dotted border-gray-300"></div>
+                                  <div className="px-4 text-gray-400">
+                                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                                    </svg>
+                                  </div>
+                                  <div className="flex-1 border-t-2 border-dotted border-gray-300"></div>
+                                </div>
+                              )}
                               </div>
                             ));
                           })()}
@@ -3344,6 +3433,7 @@ const TripDetails = () => {
               </div>
             )}
           </div>
+        </div>
       </div>
     </div>
   );
