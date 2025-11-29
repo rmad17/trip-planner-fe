@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import PlaceSearchInput from '../components/PlaceSearchInput';
 import ProfileButton from '../components/ProfileButton';
@@ -25,7 +25,6 @@ import {
   MapPin,
   Calendar,
   Clock,
-  DollarSign,
   Plane,
   Car,
   Train,
@@ -36,7 +35,8 @@ import {
   Hotel,
   CreditCard,
   Navigation,
-  Map
+  Map,
+  Printer
 } from 'lucide-react';
 
 // Helper function to extract error messages from API responses
@@ -48,17 +48,18 @@ const TripDetails = () => {
   const { tripId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  
+  const [searchParams, setSearchParams] = useSearchParams();
+
   // Trip data
   const [trip, setTrip] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
+
   // Edit modes
   const [isEditingTrip, setIsEditingTrip] = useState(false);
   const [isEditingOverview, setIsEditingOverview] = useState(false);
   const [editedTrip, setEditedTrip] = useState({});
-  
+
   // Sections data
   const [tripHops, setTripHops] = useState([]);
   const [tripDays, setTripDays] = useState([]);
@@ -68,9 +69,13 @@ const TripDetails = () => {
   const [stays, setStays] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [expensesSummary, setExpensesSummary] = useState(null);
-  
-  // UI states
-  const [activeSection, setActiveSection] = useState('overview');
+
+  // UI states - Initialize from URL or default to 'overview'
+  const [activeSection, setActiveSection] = useState(() => {
+    const sectionFromUrl = searchParams.get('section');
+    const validSections = ['overview', 'destinations', 'days', 'activities', 'itinerary', 'stays', 'expenses', 'documents'];
+    return validSections.includes(sectionFromUrl) ? sectionFromUrl : 'overview';
+  });
   const [showAddForms, setShowAddForms] = useState({});
   const [itineraryViewMode, setItineraryViewMode] = useState('all'); // 'all' or 'day'
   const [selectedDay, setSelectedDay] = useState(null);
@@ -135,9 +140,16 @@ const TripDetails = () => {
     check_in: '',
     check_out: '',
     cost: '',
+    cost_per_night: '',
     notes: '',
     trip_hop: ''
   });
+
+  // Function to change section and update URL
+  const changeSection = (section) => {
+    setActiveSection(section);
+    setSearchParams({ section });
+  };
 
   useEffect(() => {
     if (tripId) {
@@ -179,7 +191,7 @@ const TripDetails = () => {
       await Promise.all([
         fetchItinerary(), // Will build from days if backend endpoint not available
         fetchDocuments(),
-        fetchStays(), // Now depends on hops being loaded
+        fetchStays(tripData.trip_hops || []), // Pass hops explicitly to avoid state timing issues
         fetchExpenses(),
       ]);
     } catch (error) {
@@ -262,11 +274,14 @@ const TripDetails = () => {
     }
   };
 
-  const fetchStays = async () => {
+  const fetchStays = async (hopsToUse = null) => {
     try {
+      // Use provided hops or fall back to state
+      const hops = hopsToUse || tripHops;
+
       // Stays are associated with trip hops, so we need to collect them from all hops
-      if (tripHops.length > 0) {
-        const staysPromises = tripHops.map(async (hop) => {
+      if (hops && hops.length > 0) {
+        const staysPromises = hops.map(async (hop) => {
           try {
             const response = await staysAPI.getStays(hop.id);
             // Handle different response formats
@@ -276,7 +291,7 @@ const TripDetails = () => {
             } else if (staysData.data) {
               staysData = staysData.data;
             }
-            
+
             // Add hop reference to each stay for easier display
             return (Array.isArray(staysData) ? staysData : []).map(stay => ({
               ...stay,
@@ -287,7 +302,7 @@ const TripDetails = () => {
             return [];
           }
         });
-        
+
         const staysResponses = await Promise.all(staysPromises);
         const allStays = staysResponses.flat();
         setStays(allStays);
@@ -722,10 +737,13 @@ const TripDetails = () => {
 
     try {
       const stayData = {
-        ...newStayData,
+        name: newStayData.name,
+        address: newStayData.address,
+        notes: newStayData.notes,
         cost: newStayData.cost ? parseFloat(newStayData.cost) : null,
-        check_in: newStayData.check_in ? new Date(newStayData.check_in).toISOString() : null,
-        check_out: newStayData.check_out ? new Date(newStayData.check_out).toISOString() : null
+        cost_per_night: newStayData.cost_per_night ? parseFloat(newStayData.cost_per_night) : null,
+        check_in_date: newStayData.check_in || null,
+        check_out_date: newStayData.check_out || null
       };
 
       await staysAPI.createStay(newStayData.trip_hop, stayData);
@@ -735,6 +753,7 @@ const TripDetails = () => {
         check_in: '',
         check_out: '',
         cost: '',
+        cost_per_night: '',
         notes: '',
         trip_hop: ''
       });
@@ -749,10 +768,14 @@ const TripDetails = () => {
   const handleUpdateStay = async (stayId, updatedData) => {
     try {
       const stayData = {
-        ...updatedData,
+        name: updatedData.name,
+        trip_hop: updatedData.trip_hop || null,
+        address: updatedData.address,
+        notes: updatedData.notes,
         cost: updatedData.cost ? parseFloat(updatedData.cost) : null,
-        check_in: updatedData.check_in ? new Date(updatedData.check_in).toISOString() : null,
-        check_out: updatedData.check_out ? new Date(updatedData.check_out).toISOString() : null
+        cost_per_night: updatedData.cost_per_night ? parseFloat(updatedData.cost_per_night) : null,
+        check_in_date: updatedData.check_in_date || null,
+        check_out_date: updatedData.check_out_date || null
       };
 
       await staysAPI.updateStay(stayId, stayData);
@@ -855,6 +878,11 @@ const TripDetails = () => {
     };
   };
 
+  // Print itinerary handler
+  const handlePrintItinerary = () => {
+    window.print();
+  };
+
   const sections = [
     { id: 'overview', label: 'Overview', icon: MapPin, description: 'Trip summary & details' },
     { id: 'destinations', label: 'Destinations', icon: Navigation, description: 'Trip hops/locations' },
@@ -898,7 +926,7 @@ const TripDetails = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-black shadow-lg">
+      <header className="bg-black shadow-lg print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center space-x-4">
@@ -969,7 +997,7 @@ const TripDetails = () => {
       <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <div className="flex gap-6">
           {/* Vertical Tab Navigation */}
-          <div className="w-64 flex-shrink-0">
+          <div className="w-64 flex-shrink-0 print:hidden">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 sticky top-24 overflow-hidden">
               <div className="p-4 border-b border-gray-200">
                 <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">Sections</h3>
@@ -980,7 +1008,7 @@ const TripDetails = () => {
                   return (
                     <button
                       key={section.id}
-                      onClick={() => setActiveSection(section.id)}
+                      onClick={() => changeSection(section.id)}
                       className={`w-full flex items-start space-x-3 px-4 py-3 rounded-lg transition-all mb-1 ${
                         activeSection === section.id
                           ? 'bg-primary-50 text-primary-700 border-l-4 border-primary-600'
@@ -1122,8 +1150,7 @@ const TripDetails = () => {
                           <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                             Budget
                           </h3>
-                          <div className="flex items-start space-x-2 text-gray-900">
-                            <DollarSign className="h-5 w-5 text-gray-400 flex-shrink-0 mt-0.5" />
+                          <div className="text-gray-900">
                             <span className="text-base">{expensesSummary ? formatCurrency(expensesSummary.total) : 'Not set'}</span>
                           </div>
                         </div>
@@ -1904,7 +1931,6 @@ const TripDetails = () => {
                                   </div>
                                   {hop.estimated_budget && (
                                     <div className="flex items-center space-x-1">
-                                      <DollarSign className="h-4 w-4 text-gray-400" />
                                       <span>{formatCurrency(hop.estimated_budget)}</span>
                                     </div>
                                   )}
@@ -2601,13 +2627,28 @@ const TripDetails = () => {
 
             {activeSection === 'itinerary' && (
               <div className="card">
-                <div className="px-6 py-4 border-b border-gray-200">
+                {/* Print Header - Only visible when printing */}
+                <div className="hidden print:block px-6 py-4 border-b-2 border-gray-900">
+                  <h1 className="text-3xl font-bold text-gray-900 mb-2">{trip?.name || 'Trip Itinerary'}</h1>
+                  {trip?.start_date && trip?.end_date && (
+                    <p className="text-lg text-gray-700">
+                      {formatDate(trip.start_date)} - {formatDate(trip.end_date)}
+                    </p>
+                  )}
+                  {tripHops && tripHops.length > 0 && (
+                    <p className="text-gray-600 mt-1">
+                      {tripHops.map(hop => `${hop.city || hop.name}`).filter(Boolean).join(' → ')}
+                    </p>
+                  )}
+                </div>
+
+                <div className="px-6 py-4 border-b border-gray-200 print:border-b-2">
                   <div className="flex justify-between items-center">
                     <div>
                       <h2 className="text-xl font-bold text-gray-900 font-display">Itinerary</h2>
-                      <p className="text-sm text-gray-600 mt-1">Auto-generated from your activities</p>
+                      <p className="text-sm text-gray-600 mt-1 print:hidden">Auto-generated from your activities</p>
                     </div>
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-3 print:hidden">
                       {/* View Mode Toggle */}
                       <div className="flex rounded-md shadow-sm">
                         <button
@@ -2654,6 +2695,16 @@ const TripDetails = () => {
                           ))}
                         </select>
                       )}
+
+                      {/* Print Button */}
+                      <button
+                        onClick={handlePrintItinerary}
+                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md flex items-center space-x-2 transition-colors"
+                        title="Print Itinerary"
+                      >
+                        <Printer className="h-4 w-4" />
+                        <span className="text-sm font-medium">Print</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -2898,6 +2949,60 @@ const TripDetails = () => {
                                     </div>
                                   )}
                                 </div>
+
+                                {/* Accommodation for this day */}
+                                {(() => {
+                                  const dayStays = stays.filter(stay => {
+                                    const checkIn = stay.check_in_date ? new Date(stay.check_in_date).toISOString().split('T')[0] : null;
+                                    const checkOut = stay.check_out_date ? new Date(stay.check_out_date).toISOString().split('T')[0] : null;
+                                    const currentDate = groupedDay.date;
+
+                                    if (!checkIn) return false;
+
+                                    // Check if this day falls within the stay period
+                                    if (checkOut) {
+                                      return currentDate >= checkIn && currentDate < checkOut;
+                                    }
+                                    return currentDate === checkIn;
+                                  });
+
+                                  return dayStays.length > 0 && (
+                                    <div className="px-4 pb-2">
+                                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                        <div className="flex items-start space-x-2">
+                                          <Hotel className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                                          <div className="flex-1">
+                                            <h4 className="font-medium text-blue-900">Accommodation</h4>
+                                            {dayStays.map((stay, idx) => (
+                                              <div key={stay.id || idx} className="mt-2">
+                                                <p className="font-medium text-gray-900">{stay.name}</p>
+                                                {stay.address && (
+                                                  <p className="text-sm text-gray-600 flex items-center space-x-1 mt-1">
+                                                    <MapPin className="h-3 w-3" />
+                                                    <span>{stay.address}</span>
+                                                  </p>
+                                                )}
+                                                {(stay.check_in_date || stay.check_out_date) && (
+                                                  <p className="text-sm text-gray-600 mt-1">
+                                                    {stay.check_in_date && formatDate(stay.check_in_date)}
+                                                    {stay.check_in_date && stay.check_out_date && ' → '}
+                                                    {stay.check_out_date && formatDate(stay.check_out_date)}
+                                                  </p>
+                                                )}
+                                                {stay.cost_per_night && (
+                                                  <p className="text-sm text-blue-700 mt-1">
+                                                    {formatCurrency(stay.cost_per_night)}/night
+                                                  </p>
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+
                                 <div className="p-4">
                                   {!groupedDay.all_activities || groupedDay.all_activities.length === 0 ? (
                                     <p className="text-gray-500 text-sm">No activities planned for this day</p>
@@ -2933,7 +3038,7 @@ const TripDetails = () => {
                                                     <div className="mt-1">{formatCurrency(activity.estimated_cost)}</div>
                                                   )}
                                                 </div>
-                                                <div className="flex items-center space-x-1 ml-2">
+                                                <div className="flex items-center space-x-1 ml-2 print:hidden">
                                                   <button
                                                     onClick={() => console.log('Edit activity:', activity.id)}
                                                     className="text-primary-600 hover:text-primary-700 p-1"
@@ -3165,11 +3270,22 @@ const TripDetails = () => {
                         )}
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Cost</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Cost per Night</label>
                         <input
                           type="number"
                           step="0.01"
-                          value={newStayData.cost}
+                          value={newStayData.cost_per_night || ''}
+                          onChange={(e) => setNewStayData(prev => ({ ...prev, cost_per_night: e.target.value }))}
+                          className="input-field"
+                          placeholder="Cost per night"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Total Cost</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={newStayData.cost || ''}
                           onChange={(e) => setNewStayData(prev => ({ ...prev, cost: e.target.value }))}
                           className="input-field"
                           placeholder="Total cost"
@@ -3224,7 +3340,7 @@ const TripDetails = () => {
                         return isEditing ? (
                           <div key={stay.id} className="border-2 border-blue-200 rounded-lg p-4 bg-blue-50">
                             <h4 className="font-medium text-gray-900 mb-3">Edit Accommodation</h4>
-                            <div className="space-y-3">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                               <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
                                 <input
@@ -3235,13 +3351,78 @@ const TripDetails = () => {
                                 />
                               </div>
                               <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Cost</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Destination</label>
+                                <select
+                                  defaultValue={stay.trip_hop || ''}
+                                  className="input-field"
+                                  id={`stay-hop-${stay.id}`}
+                                >
+                                  <option value="">Select destination</option>
+                                  {tripHops.map(hop => (
+                                    <option key={hop.id} value={hop.id}>
+                                      {hop.name || `${hop.city}, ${hop.country}`}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                                <input
+                                  type="text"
+                                  defaultValue={stay.address || ''}
+                                  className="input-field"
+                                  id={`stay-address-${stay.id}`}
+                                  placeholder="Full address"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Check-in Date</label>
+                                <input
+                                  type="date"
+                                  defaultValue={stay.check_in_date ? new Date(stay.check_in_date).toISOString().split('T')[0] : (stay.check_in ? new Date(stay.check_in).toISOString().split('T')[0] : '')}
+                                  className="input-field"
+                                  id={`stay-checkin-${stay.id}`}
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Check-out Date</label>
+                                <input
+                                  type="date"
+                                  defaultValue={stay.check_out_date ? new Date(stay.check_out_date).toISOString().split('T')[0] : (stay.check_out ? new Date(stay.check_out).toISOString().split('T')[0] : '')}
+                                  className="input-field"
+                                  id={`stay-checkout-${stay.id}`}
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Cost per Night</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  defaultValue={stay.cost_per_night || ''}
+                                  className="input-field"
+                                  id={`stay-cost-per-night-${stay.id}`}
+                                  placeholder="Cost per night"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Total Cost</label>
                                 <input
                                   type="number"
                                   step="0.01"
                                   defaultValue={stay.cost || stay.total_cost || ''}
                                   className="input-field"
                                   id={`stay-cost-${stay.id}`}
+                                  placeholder="Total cost"
+                                />
+                              </div>
+                              <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                                <textarea
+                                  defaultValue={stay.notes || ''}
+                                  rows="3"
+                                  className="input-field resize-none"
+                                  id={`stay-notes-${stay.id}`}
+                                  placeholder="Booking confirmation, special requests, etc."
                                 />
                               </div>
                             </div>
@@ -3255,9 +3436,14 @@ const TripDetails = () => {
                               <button
                                 onClick={() => {
                                   const updatedData = {
-                                    ...stay,
                                     name: document.getElementById(`stay-name-${stay.id}`).value,
-                                    cost: parseFloat(document.getElementById(`stay-cost-${stay.id}`).value) || 0
+                                    trip_hop: document.getElementById(`stay-hop-${stay.id}`).value,
+                                    address: document.getElementById(`stay-address-${stay.id}`).value,
+                                    check_in_date: document.getElementById(`stay-checkin-${stay.id}`).value,
+                                    check_out_date: document.getElementById(`stay-checkout-${stay.id}`).value,
+                                    cost_per_night: parseFloat(document.getElementById(`stay-cost-per-night-${stay.id}`).value) || null,
+                                    cost: parseFloat(document.getElementById(`stay-cost-${stay.id}`).value) || null,
+                                    notes: document.getElementById(`stay-notes-${stay.id}`).value
                                   };
                                   handleUpdateStay(stay.id, updatedData);
                                 }}
@@ -3307,7 +3493,6 @@ const TripDetails = () => {
                                 <div className="flex items-center space-x-4">
                                   {stay.cost_per_night && (
                                     <div className="flex items-center space-x-1">
-                                      <DollarSign className="h-4 w-4 text-gray-400" />
                                       <span>{formatCurrency(stay.cost_per_night)}/night</span>
                                     </div>
                                   )}
