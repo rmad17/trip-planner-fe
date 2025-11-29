@@ -1,0 +1,14 @@
+name: trip-planner
+region: blr
+static_sites:
+  - name: trip-planner-fe
+    github:
+      repo: rmad17/trip-planner-fe
+      branch: main
+      deploy_on_push: true
+    build_command: npm run build
+    output_dir: build
+    environment_slug: node-js
+    routes:
+      - path: /
+    catchall_document: index.html  # This is crucial for React Router!
